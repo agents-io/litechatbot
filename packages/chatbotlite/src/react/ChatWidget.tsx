@@ -107,7 +107,9 @@ const KEYFRAMES = `
 @keyframes chatbotlite-slide { 0% { opacity: 0; transform: translateY(16px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes chatbotlite-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes chatbotlite-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
-.chatbotlite-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes chatbotlite-cursor { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+@keyframes chatbotlite-pulse { 0%, 100% { box-shadow: 0 12px 28px -8px rgba(15,23,42,0.32), 0 4px 8px -2px rgba(15,23,42,0.12); } 50% { box-shadow: 0 14px 32px -8px rgba(15,23,42,0.36), 0 6px 12px -2px rgba(15,23,42,0.16); } }
+.chatbotlite-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); animation: chatbotlite-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1), chatbotlite-pulse 3.6s ease-in-out 1.2s 2; }
 .chatbotlite-launcher:hover { transform: translateY(-2px) scale(1.04); }
 .chatbotlite-launcher:active { transform: translateY(0) scale(0.98); }
 .chatbotlite-close { transition: background 120ms ease; }
@@ -118,6 +120,9 @@ const KEYFRAMES = `
 .chatbotlite-input:focus { box-shadow: 0 0 0 3px rgba(15,23,42,0.06); }
 .chatbotlite-msg { animation: chatbotlite-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
 .chatbotlite-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: chatbotlite-dot 1.2s ease-in-out infinite; }
+.chatbotlite-cursor { display: inline-block; width: 2px; height: 1em; background: currentColor; vertical-align: text-bottom; margin-left: 1px; animation: chatbotlite-cursor 1s steps(1) infinite; }
+.chatbotlite-attach-btn:hover:not(:disabled), .chatbotlite-voice-btn:hover:not(:disabled) { background: ${BORDER}; }
+.chatbotlite-attach-btn:active:not(:disabled), .chatbotlite-voice-btn:active:not(:disabled) { transform: scale(0.96); }
 .chatbotlite-dot:nth-child(2) { animation-delay: 0.15s; }
 .chatbotlite-dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
 .chatbotlite-brand:hover { color: ${TEXT_MUTED} !important; }
@@ -564,6 +569,10 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     }}
                   >
                     {m.content}
+                    {/* Streaming cursor on the message currently being filled */}
+                    {sending && m.role === "assistant" && m === messages[messages.length - 1] && (
+                      <span className="chatbotlite-cursor" aria-hidden="true" />
+                    )}
                   </div>
                 )}
                 {/* Tool cards attached to this assistant message */}
@@ -740,6 +749,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     }}
                   />
                   <button
+                    className="chatbotlite-attach-btn"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={sending || files.length >= maxFiles}
                     aria-label="Attach file"
@@ -752,13 +762,14 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                       cursor: sending || files.length >= maxFiles ? "default" : "pointer",
                       opacity: sending || files.length >= maxFiles ? 0.4 : 1,
                       fontSize: 16,
-                      transition: "background 120ms ease"
+                      transition: "background 120ms ease, transform 80ms ease"
                     }}
                   >📎</button>
                 </>
               )}
               {voiceEnabled && speechSupported && (
                 <button
+                  className="chatbotlite-voice-btn"
                   onClick={toggleVoice}
                   disabled={sending}
                   aria-label={voiceListening ? "Stop recording" : "Start voice input"}
@@ -772,7 +783,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     cursor: sending ? "default" : "pointer",
                     opacity: sending ? 0.4 : 1,
                     fontSize: 16,
-                    transition: "background 120ms ease, color 120ms ease, border-color 120ms ease"
+                    transition: "background 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease"
                   }}
                 >🎙️</button>
               )}
