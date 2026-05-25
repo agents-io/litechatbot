@@ -184,6 +184,38 @@ const bot = new ChatBot({
 
 ---
 
+## Vanilla HTML / WordPress / Webflow / Shopify
+
+Drop into any HTML page — no React, no build step:
+
+```html
+<script src="https://unpkg.com/chatbotlite/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat",
+    title: "Acme Plumbing",
+    theme: { primary: "#0f172a" },
+    attach: { enabled: true, accept: ["image/*", ".pdf"] },
+    voice: { enabled: true },
+    tools: {
+      uploadForReview: {
+        handler: async ({ files, purpose }) => {
+          const form = new FormData();
+          for (const f of files) form.append("file", f);
+          form.append("purpose", purpose);
+          await fetch("/api/store-doc", { method: "POST", body: form });
+          return { status: "received" };
+        }
+      }
+    }
+  });
+</script>
+```
+
+React + ReactDOM are bundled inline (~230KB minified). The widget appears bottom-right of your page.
+
+`mount(opts)` returns `{ unmount, update }` for programmatic control.
+
 ## Headless mode (your own UI)
 
 ```ts
@@ -325,8 +357,9 @@ We're not trying to be assistant-ui (UI primitives) or CopilotKit (in-app copilo
 - [x] v0.2 — Polished UI, model-based chain, attempts metadata
 - [x] v0.3 — Markdown knowledge (any vertical), folder loader
 - [x] **v0.4 — Streaming, attachments, voice, tool cards, defense in depth**
-- [ ] v0.5 — Native function-calling upgrade (where providers support), vanilla JS bundle
-- [ ] v0.6 — RAG hooks for large knowledge bases
+- [x] **v0.5 — Vanilla JS bundle (no React needed), auto tool-prompt injection**
+- [ ] v0.6 — Native function-calling upgrade where providers support it
+- [ ] v0.7 — RAG hooks for large knowledge bases
 - [ ] v1.0 — API stable
 
 ---

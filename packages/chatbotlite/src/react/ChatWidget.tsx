@@ -307,18 +307,19 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
     attachedFiles: File[],
     onToken: (token: string) => void
   ): Promise<string> {
+    const enabledTools = Object.keys(tools);
     let body: BodyInit;
     const headers: Record<string, string> = { Accept: "text/event-stream, application/json" };
     if (attachedFiles.length > 0) {
       const form = new FormData();
       form.append("message", text);
       form.append("transcript", JSON.stringify(history));
+      form.append("enabledTools", JSON.stringify(enabledTools));
       for (const f of attachedFiles) form.append("attachments", f, f.name);
       body = form;
-      // Don't set Content-Type — browser sets multipart boundary automatically
     } else {
       headers["Content-Type"] = "application/json";
-      body = JSON.stringify({ message: text, transcript: history });
+      body = JSON.stringify({ message: text, transcript: history, enabledTools });
     }
     const res = await fetch(props.endpoint!, { method: "POST", headers, body });
     if (!res.ok) throw new Error(`Endpoint ${res.status}: ${await res.text().catch(() => "")}`);

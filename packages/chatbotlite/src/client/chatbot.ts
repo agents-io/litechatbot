@@ -22,6 +22,8 @@ export interface ReplyOptions {
   history?: Message[];
   /** Override system prompt — advanced use only. */
   systemPrompt?: string;
+  /** Tool names that the widget will render (auto-injects examples into system prompt). */
+  enabledTools?: string[];
 }
 
 export interface ReplyWithMediaOptions extends ReplyOptions {
@@ -71,16 +73,28 @@ export class ChatBot {
 
   private readonly guards: GuardsConfig;
 
+  private readonly knowledge: string;
+
   constructor(init: ChatBotInit) {
     if (!init.knowledge || typeof init.knowledge !== "string" || init.knowledge.trim().length === 0) {
       throw new Error("chatbotlite: knowledge is required (a non-empty markdown string).");
     }
+    this.knowledge = init.knowledge;
     this.keys = init.providers.keys ?? {};
     this.steps = resolveChain(init.providers);
     this.fetcher = init.options?.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = init.options?.timeoutMs ?? 30_000;
     this.cachedSystemPrompt = buildSystemPrompt(init.knowledge);
     this.guards = init.guards ?? {};
+  }
+
+  /** Build system prompt for given opts — uses cached if no enabledTools, else rebuilds. */
+  private resolveSystemPrompt(opts: ReplyOptions): string {
+    if (opts.systemPrompt) return opts.systemPrompt;
+    if (opts.enabledTools && opts.enabledTools.length > 0) {
+      return buildSystemPrompt(this.knowledge, opts.enabledTools);
+    }
+    return this.cachedSystemPrompt;
   }
 
   /** Run an LLM judge against content. Fail-open on errors. */
@@ -123,7 +137,7 @@ export class ChatBot {
    *   event: error   data: {"message":"...","attempts":[...]}
    */
   async replyStream(message: string, opts: ReplyOptions = {}): Promise<ReadableStream<Uint8Array>> {
-    const systemPrompt = opts.systemPrompt ?? this.cachedSystemPrompt;
+    const systemPrompt = this.resolveSystemPrompt(opts);
     const messages: Message[] = [
       { role: "system", content: systemPrompt },
       ...(opts.history ?? []),
@@ -246,7 +260,7 @@ export class ChatBot {
     // Convert images to data URLs once
     const dataUrls = await Promise.all(images.map(fileToDataUrl));
 
-    const systemPrompt = opts.systemPrompt ?? this.cachedSystemPrompt;
+    const systemPrompt = this.resolveSystemPrompt(opts);
     const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [];
     if (message) userContent.push({ type: "text", text: message });
     for (const url of dataUrls) userContent.push({ type: "image_url", image_url: { url } });
@@ -334,7 +348,7 @@ export class ChatBot {
       }
     }
 
-    const systemPrompt = opts.systemPrompt ?? this.cachedSystemPrompt;
+    const systemPrompt = this.resolveSystemPrompt(opts);
     const messages: Message[] = [
       { role: "system", content: systemPrompt },
       ...(opts.history ?? []),
