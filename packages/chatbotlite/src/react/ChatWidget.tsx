@@ -2,6 +2,25 @@ import { useState, useRef, useEffect, useMemo, type ReactElement, type CSSProper
 import type { Knowledge, Message } from "../core/types.js";
 import { ChatBot } from "../client/chatbot.js";
 import type { ProviderConfig } from "../client/types.js";
+import { parseToolMarkers, stripToolMarkers, type ToolMarker } from "../core/tools.js";
+import { UploadForReview } from "./tools/UploadForReview.js";
+import { ScheduleCallback } from "./tools/ScheduleCallback.js";
+import { RequestPayment } from "./tools/RequestPayment.js";
+
+export interface ChatWidgetTools {
+  uploadForReview?: {
+    handler: (args: { files: File[]; purpose: string }) => Promise<{ status?: string; message?: string; [k: string]: unknown }>;
+  };
+  scheduleCallback?: {
+    getAvailableSlots: (args: { durationMin: number; timezone: string }) => Promise<string[]>;
+    onConfirm: (args: { slot: string }) => Promise<{ confirmedAt?: string; joinUrl?: string; [k: string]: unknown }>;
+  };
+  requestPayment?: {
+    showInterac?: boolean;
+    stripeLink?: string;
+    onPick: (args: { method: "interac" | "stripe"; amount: number; currency: string }) => Promise<{ status?: string; [k: string]: unknown }>;
+  };
+}
 
 interface ChatWidgetCommonProps {
   /** Optional theme overrides. */
@@ -37,6 +56,8 @@ interface ChatWidgetCommonProps {
     /** BCP-47 language tag (default "en-US"). */
     lang?: string;
   };
+  /** LLM-triggered tool registry. Bot emits `[SKILL:name args]` → widget renders matching card. */
+  tools?: ChatWidgetTools;
 }
 
 interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
@@ -55,6 +76,14 @@ interface ChatWidgetEndpointProps extends ChatWidgetCommonProps {
 }
 
 export type ChatWidgetProps = ChatWidgetDirectProps | ChatWidgetEndpointProps;
+
+interface PendingTool {
+  /** ID of the assistant message this tool is attached to. */
+  messageId: string;
+  marker: ToolMarker;
+  status: "pending" | "submitting" | "submitted";
+  result?: Record<string, unknown>;
+}
 
 interface ChatMessage extends Message {
   id: string;
@@ -144,9 +173,60 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [pendingTools, setPendingTools] = useState<PendingTool[]>([]);
+  const tools = props.tools ?? {};
+
   const [voiceListening, setVoiceListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+
+  async function continueAfterTool(toolName: string, result: Record<string, unknown>): Promise<void> {
+    // Post tool result as a hidden user-side context message so LLM continues
+    const ctxMsg = `[Tool ${toolName} result: ${JSON.stringify(result)}]`;
+    setSending(true);
+    const assistantId = `a${Date.now()}`;
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", ts: Date.now() }]);
+    const appendToken = (tok: string): void => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + tok } : m))
+      );
+    };
+    try {
+      const history: Message[] = messages
+        .filter((m) => m.role !== "system")
+        .map((m) => ({ role: m.role, content: m.content }));
+      const reply = isEndpointMode
+        ? await fetchReplyFromEndpoint(ctxMsg, history, [], appendToken)
+        : (await bot!.reply(ctxMsg, { history })).reply;
+      const markers = parseToolMarkers(reply);
+      const cleanReply = stripToolMarkers(reply);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: cleanReply } : m))
+      );
+      if (markers.length > 0) {
+        setPendingTools((prev) => [
+          ...prev,
+          ...markers.map((marker) => ({ messageId: assistantId, marker, status: "pending" as const }))
+        ]);
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: `Sorry — something went wrong. (${errMsg})` } : m
+        )
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleToolSubmit(toolName: string, idx: number, result: Record<string, unknown>): Promise<void> {
+    setPendingTools((prev) =>
+      prev.map((p, i) => (i === idx ? { ...p, status: "submitted", result } : p))
+    );
+    await continueAfterTool(toolName, result);
+  }
 
   function toggleVoice(): void {
     if (!speechSupported) return;
@@ -322,10 +402,18 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
       const reply = isEndpointMode
         ? await fetchReplyFromEndpoint(text, history, attached, appendToken)
         : (await bot!.reply(text, { history })).reply;
-      // For non-streaming mode (direct ChatBot or JSON endpoint), set full reply at once
+      // Parse tool markers from final reply
+      const markers = parseToolMarkers(reply);
+      const cleanReply = stripToolMarkers(reply);
       setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: reply } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: cleanReply } : m))
       );
+      if (markers.length > 0) {
+        setPendingTools((prev) => [
+          ...prev,
+          ...markers.map((marker) => ({ messageId: assistantId, marker, status: "pending" as const }))
+        ]);
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setMessages((prev) =>
@@ -453,28 +541,123 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             }}
           >
             {messages.map((m) => (
-              <div
-                key={m.id}
-                className="chatbotlite-msg"
-                style={{
-                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "82%",
-                  padding: "9px 13px",
-                  borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  background: m.role === "user" ? primary : SURFACE,
-                  color: m.role === "user" ? onPrimary : TEXT_BODY,
-                  border: m.role === "user" ? "none" : `1px solid ${BORDER}`,
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                  letterSpacing: "-0.005em",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  boxShadow: m.role === "user"
-                    ? "0 1px 2px rgba(15,23,42,0.12)"
-                    : "0 1px 2px rgba(15,23,42,0.04)"
-                }}
-              >
-                {m.content}
+              <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: m.role === "user" ? "flex-end" : "stretch" }}>
+                {m.content && (
+                  <div
+                    className="chatbotlite-msg"
+                    style={{
+                      alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                      maxWidth: "82%",
+                      padding: "9px 13px",
+                      borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                      background: m.role === "user" ? primary : SURFACE,
+                      color: m.role === "user" ? onPrimary : TEXT_BODY,
+                      border: m.role === "user" ? "none" : `1px solid ${BORDER}`,
+                      fontSize: 14,
+                      lineHeight: 1.5,
+                      letterSpacing: "-0.005em",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      boxShadow: m.role === "user"
+                        ? "0 1px 2px rgba(15,23,42,0.12)"
+                        : "0 1px 2px rgba(15,23,42,0.04)"
+                    }}
+                  >
+                    {m.content}
+                  </div>
+                )}
+                {/* Tool cards attached to this assistant message */}
+                {pendingTools
+                  .map((pt, originalIdx) => ({ pt, originalIdx }))
+                  .filter(({ pt }) => pt.messageId === m.id)
+                  .map(({ pt, originalIdx }) => {
+                    const toolCommonStyle = { className: "chatbotlite-msg", style: { alignSelf: "stretch" } };
+                    const palette = {
+                      primary, onPrimary,
+                      border: BORDER, surface: SURFACE, surfaceMuted: SURFACE_MUTED,
+                      textBody: TEXT_BODY, textMuted: TEXT_MUTED
+                    };
+                    if (pt.marker.name === "uploadForReview" && tools.uploadForReview) {
+                      return (
+                        <div key={`tool-${originalIdx}`} {...toolCommonStyle}>
+                          <UploadForReview
+                            {...palette}
+                            purpose={String(pt.marker.args.purpose ?? "files")}
+                            accept={String(pt.marker.args.accept ?? "*")}
+                            maxMb={Number(pt.marker.args.maxMb ?? 10)}
+                            submitting={pt.status === "submitting"}
+                            submitted={pt.status === "submitted"}
+                            onSubmit={async (files) => {
+                              setPendingTools((prev) =>
+                                prev.map((p, i) => (i === originalIdx ? { ...p, status: "submitting" } : p))
+                              );
+                              try {
+                                const result = await tools.uploadForReview!.handler({
+                                  files,
+                                  purpose: String(pt.marker.args.purpose ?? "files")
+                                });
+                                await handleToolSubmit("uploadForReview", originalIdx, result);
+                              } catch (err) {
+                                setPendingTools((prev) =>
+                                  prev.map((p, i) => (i === originalIdx ? { ...p, status: "pending" } : p))
+                                );
+                                throw err;
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    }
+                    if (pt.marker.name === "scheduleCallback" && tools.scheduleCallback) {
+                      return (
+                        <div key={`tool-${originalIdx}`} {...toolCommonStyle}>
+                          <ScheduleCallback
+                            {...palette}
+                            durationMin={Number(pt.marker.args.durationMin ?? 15)}
+                            timezone={String(pt.marker.args.timezone ?? "UTC")}
+                            submitting={pt.status === "submitting"}
+                            submitted={pt.status === "submitted"}
+                            {...(pt.result?.confirmedAt ? { submittedSlot: String(pt.result.confirmedAt) } : {})}
+                            getAvailableSlots={tools.scheduleCallback.getAvailableSlots}
+                            onConfirm={async (slot) => {
+                              setPendingTools((prev) =>
+                                prev.map((p, i) => (i === originalIdx ? { ...p, status: "submitting" } : p))
+                              );
+                              const result = await tools.scheduleCallback!.onConfirm({ slot });
+                              await handleToolSubmit("scheduleCallback", originalIdx, result);
+                            }}
+                          />
+                        </div>
+                      );
+                    }
+                    if (pt.marker.name === "requestPayment" && tools.requestPayment) {
+                      return (
+                        <div key={`tool-${originalIdx}`} {...toolCommonStyle}>
+                          <RequestPayment
+                            {...palette}
+                            amount={Number(pt.marker.args.amount ?? 0)}
+                            currency={String(pt.marker.args.currency ?? "USD")}
+                            {...(pt.marker.args.reason ? { reason: String(pt.marker.args.reason) } : {})}
+                            showInterac={tools.requestPayment.showInterac ?? true}
+                            {...(tools.requestPayment.stripeLink ? { stripeLink: tools.requestPayment.stripeLink } : {})}
+                            submitting={pt.status === "submitting"}
+                            submitted={pt.status === "submitted"}
+                            {...(pt.result?.method ? { submittedMethod: pt.result.method as "interac" | "stripe" } : {})}
+                            onPick={async (method) => {
+                              setPendingTools((prev) =>
+                                prev.map((p, i) => (i === originalIdx ? { ...p, status: "submitting" } : p))
+                              );
+                              const amount = Number(pt.marker.args.amount ?? 0);
+                              const currency = String(pt.marker.args.currency ?? "USD");
+                              const result = await tools.requestPayment!.onPick({ method, amount, currency });
+                              await handleToolSubmit("requestPayment", originalIdx, { ...result, method });
+                            }}
+                          />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
               </div>
             ))}
             {sending && (
