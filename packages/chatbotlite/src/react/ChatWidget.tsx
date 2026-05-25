@@ -135,13 +135,70 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
     return undefined;
   }, [open]);
 
-  async function fetchReplyFromEndpoint(text: string, history: Message[]): Promise<string> {
+  /**
+   * Fetch reply from server endpoint. Auto-detects SSE streaming vs JSON response.
+   * When streaming, onToken is called for each chunk so the widget can update progressively.
+   */
+  async function fetchReplyFromEndpoint(
+    text: string,
+    history: Message[],
+    onToken: (token: string) => void
+  ): Promise<string> {
     const res = await fetch(props.endpoint!, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream, application/json" },
       body: JSON.stringify({ message: text, transcript: history })
     });
     if (!res.ok) throw new Error(`Endpoint ${res.status}: ${await res.text().catch(() => "")}`);
+
+    const contentType = res.headers.get("Content-Type") ?? "";
+    if (contentType.includes("text/event-stream") && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assembled = "";
+      let lastError: string | null = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          let evtName = "message";
+          let data = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) evtName = line.slice(6).trim();
+            else if (line.startsWith("data:")) data = line.slice(5).trim();
+          }
+          if (!data) continue;
+          if (evtName === "token") {
+            try {
+              const tok = JSON.parse(data) as string;
+              assembled += tok;
+              onToken(tok);
+            } catch { /* skip */ }
+          } else if (evtName === "done") {
+            try {
+              const obj = JSON.parse(data) as { reply?: string };
+              if (obj.reply) return obj.reply;
+            } catch { /* skip */ }
+          } else if (evtName === "error") {
+            try {
+              const obj = JSON.parse(data) as { message?: string };
+              lastError = obj.message ?? "stream error";
+            } catch {
+              lastError = "stream error";
+            }
+          }
+        }
+      }
+      if (lastError) throw new Error(lastError);
+      return assembled;
+    }
+
+    // Fallback: JSON response (legacy endpoints)
     const data = (await res.json()) as { reply?: string; error?: string };
     if (data.error) throw new Error(data.error);
     if (!data.reply) throw new Error("Endpoint returned no reply.");
@@ -155,17 +212,35 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
     const userMsg: ChatMessage = { id: `u${Date.now()}`, role: "user", content: text, ts: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
     setSending(true);
+
+    // Insert a placeholder assistant message that will be filled progressively by streaming
+    const assistantId = `a${Date.now()}`;
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", ts: Date.now() }]);
+
+    const appendToken = (tok: string): void => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + tok } : m))
+      );
+    };
+
     try {
       const history: Message[] = messages
         .filter((m) => m.role !== "system")
         .map((m) => ({ role: m.role, content: m.content }));
       const reply = isEndpointMode
-        ? await fetchReplyFromEndpoint(text, history)
+        ? await fetchReplyFromEndpoint(text, history, appendToken)
         : (await bot!.reply(text, { history })).reply;
-      setMessages((prev) => [...prev, { id: `a${Date.now()}`, role: "assistant", content: reply, ts: Date.now() }]);
+      // For non-streaming mode (direct ChatBot or JSON endpoint), set full reply at once
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: reply } : m))
+      );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [...prev, { id: `e${Date.now()}`, role: "assistant", content: `Sorry — something went wrong. (${errMsg})`, ts: Date.now() }]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: `Sorry — something went wrong. (${errMsg})` } : m
+        )
+      );
     } finally {
       setSending(false);
     }
