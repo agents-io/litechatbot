@@ -21,6 +21,16 @@ interface ChatWidgetCommonProps {
   showBranding?: boolean;
   /** Position of the launcher bubble. */
   position?: "bottom-right" | "bottom-left";
+  /** Inline file attach (always-on 📎 next to input). Disabled by default. */
+  attach?: {
+    enabled: boolean;
+    /** MIME types or file extensions to accept (e.g. ["image/*", ".pdf"]). Default: any. */
+    accept?: string[];
+    /** Max file size in MB (default 10). */
+    maxSizeMb?: number;
+    /** Max number of files per message (default 5). */
+    maxFiles?: number;
+  };
 }
 
 interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
@@ -104,14 +114,33 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const primary = themeOverrides?.primary ?? DEFAULT_PRIMARY;
   const onPrimary = themeOverrides?.onPrimary ?? DEFAULT_ON_PRIMARY;
 
+  const attachCfg = props.attach;
+  const attachEnabled = attachCfg?.enabled === true;
+  const acceptAttr = attachCfg?.accept?.join(",");
+  const maxSizeMb = attachCfg?.maxSizeMb ?? 10;
+  const maxFiles = attachCfg?.maxFiles ?? 5;
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: "g0", role: "assistant", content: resolvedGreeting, ts: Date.now() }
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function addFiles(picked: FileList | File[]): void {
+    const arr = Array.from(picked).filter((f) => f.size <= maxSizeMb * 1024 * 1024);
+    setFiles((prev) => {
+      const combined = [...prev, ...arr];
+      return combined.slice(0, maxFiles);
+    });
+  }
+  function removeFile(idx: number): void {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   useEffect(() => { ensureStyles(); }, []);
 
@@ -142,13 +171,23 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   async function fetchReplyFromEndpoint(
     text: string,
     history: Message[],
+    attachedFiles: File[],
     onToken: (token: string) => void
   ): Promise<string> {
-    const res = await fetch(props.endpoint!, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream, application/json" },
-      body: JSON.stringify({ message: text, transcript: history })
-    });
+    let body: BodyInit;
+    const headers: Record<string, string> = { Accept: "text/event-stream, application/json" };
+    if (attachedFiles.length > 0) {
+      const form = new FormData();
+      form.append("message", text);
+      form.append("transcript", JSON.stringify(history));
+      for (const f of attachedFiles) form.append("attachments", f, f.name);
+      body = form;
+      // Don't set Content-Type — browser sets multipart boundary automatically
+    } else {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify({ message: text, transcript: history });
+    }
+    const res = await fetch(props.endpoint!, { method: "POST", headers, body });
     if (!res.ok) throw new Error(`Endpoint ${res.status}: ${await res.text().catch(() => "")}`);
 
     const contentType = res.headers.get("Content-Type") ?? "";
@@ -207,9 +246,14 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
 
   async function send(): Promise<void> {
     const text = input.trim();
-    if (!text || sending) return;
+    const attached = files;
+    if ((!text && attached.length === 0) || sending) return;
     setInput("");
-    const userMsg: ChatMessage = { id: `u${Date.now()}`, role: "user", content: text, ts: Date.now() };
+    setFiles([]);
+    const userContent = attached.length > 0
+      ? `${text}${text ? "\n" : ""}📎 ${attached.map((f) => f.name).join(", ")}`
+      : text;
+    const userMsg: ChatMessage = { id: `u${Date.now()}`, role: "user", content: userContent, ts: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
     setSending(true);
 
@@ -228,7 +272,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
         .filter((m) => m.role !== "system")
         .map((m) => ({ role: m.role, content: m.content }));
       const reply = isEndpointMode
-        ? await fetchReplyFromEndpoint(text, history, appendToken)
+        ? await fetchReplyFromEndpoint(text, history, attached, appendToken)
         : (await bot!.reply(text, { history })).reply;
       // For non-streaming mode (direct ChatBot or JSON endpoint), set full reply at once
       setMessages((prev) =>
@@ -406,11 +450,82 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
 
           <div style={{
             display: "flex",
+            flexDirection: "column",
             padding: 12,
             gap: 8,
             background: SURFACE,
             borderTop: `1px solid ${BORDER}`
           }}>
+            {files.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {files.map((f, i) => (
+                  <span
+                    key={`${f.name}-${i}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 8px 4px 10px",
+                      borderRadius: 8,
+                      background: SURFACE_MUTED,
+                      border: `1px solid ${BORDER}`,
+                      fontSize: 12,
+                      color: TEXT_BODY,
+                      maxWidth: 200
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      📎 {f.name}
+                    </span>
+                    <button
+                      onClick={() => removeFile(i)}
+                      aria-label={`Remove ${f.name}`}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: TEXT_MUTED,
+                        fontSize: 14,
+                        lineHeight: 1,
+                        padding: 0
+                      }}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              {attachEnabled && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={acceptAttr}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files) addFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending || files.length >= maxFiles}
+                    aria-label="Attach file"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: SURFACE_MUTED,
+                      border: `1px solid ${BORDER}`,
+                      cursor: sending || files.length >= maxFiles ? "default" : "pointer",
+                      opacity: sending || files.length >= maxFiles ? 0.4 : 1,
+                      fontSize: 16,
+                      transition: "background 120ms ease"
+                    }}
+                  >📎</button>
+                </>
+              )}
             <input
               ref={inputRef}
               className="chatbotlite-input"
@@ -436,7 +551,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             <button
               className="chatbotlite-send"
               onClick={() => void send()}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && files.length === 0)}
               aria-label="Send message"
               style={{
                 padding: "0 16px",
@@ -449,13 +564,14 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                 fontSize: 14,
                 fontWeight: 600,
                 fontFamily: FONT_STACK,
-                cursor: sending || !input.trim() ? "default" : "pointer",
-                opacity: sending || !input.trim() ? 0.4 : 1,
+                cursor: sending || (!input.trim() && files.length === 0) ? "default" : "pointer",
+                opacity: sending || (!input.trim() && files.length === 0) ? 0.4 : 1,
                 boxShadow: "0 2px 6px -1px rgba(15,23,42,0.18)"
               }}
             >
               Send
             </button>
+            </div>
           </div>
 
           {showBranding && (
