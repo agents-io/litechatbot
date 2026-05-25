@@ -1,6 +1,7 @@
 import type { Knowledge, Message } from "../core/types.js";
 import { buildSystemPrompt } from "../core/prompts.js";
 import { checkForbiddenPhrases, stripForbidden } from "../core/guards.js";
+import { runJudge, type GuardsConfig, type JudgeVerdict } from "../core/judges.js";
 import type { Provider, ProviderConfig, ClientOptions, ChainStep, ChainEntry, AttemptInfo } from "./types.js";
 import { isKnownProvider } from "./types.js";
 import { PROVIDER_ENDPOINTS, isRetryableError } from "./providers.js";
@@ -12,6 +13,8 @@ export interface ChatBotInit {
   providers: ProviderConfig;
   /** Optional runtime overrides. */
   options?: ClientOptions;
+  /** Defense-in-depth: phrase redlines (default) + optional LLM input/output judges. */
+  guards?: GuardsConfig;
 }
 
 export interface ReplyOptions {
@@ -30,8 +33,12 @@ export interface ReplyResult {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   /** Guard violations the bot caught and stripped, if any. */
   guardWarnings: string[];
+  /** LLM-judge verdicts if judges configured. */
+  judges?: { input?: JudgeVerdict; output?: JudgeVerdict };
   /** Debug trace of every attempt in the chain. */
   attempts: AttemptInfo[];
+  /** True when blocked by input judge — `reply` will be the refusal message. */
+  blockedByInputJudge?: boolean;
 }
 
 /**
@@ -57,6 +64,8 @@ export class ChatBot {
   private readonly timeoutMs: number;
   private readonly cachedSystemPrompt: string;
 
+  private readonly guards: GuardsConfig;
+
   constructor(init: ChatBotInit) {
     if (!init.knowledge || typeof init.knowledge !== "string" || init.knowledge.trim().length === 0) {
       throw new Error("chatbotlite: knowledge is required (a non-empty markdown string).");
@@ -66,6 +75,27 @@ export class ChatBot {
     this.fetcher = init.options?.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = init.options?.timeoutMs ?? 30_000;
     this.cachedSystemPrompt = buildSystemPrompt(init.knowledge);
+    this.guards = init.guards ?? {};
+  }
+
+  /** Run an LLM judge against content. Fail-open on errors. */
+  private async judge(
+    config: NonNullable<GuardsConfig["inputJudge"]>,
+    content: string
+  ): Promise<JudgeVerdict> {
+    const endpoint = PROVIDER_ENDPOINTS[config.provider];
+    const key = this.keys[config.provider];
+    if (!key) {
+      return { decision: "PASS", raw: `judge provider ${config.provider} has no key — fail-open` };
+    }
+    const model = config.model ?? endpoint.defaultModel;
+    return runJudge(
+      { provider: config.provider, model, prompt: config.prompt },
+      key,
+      endpoint.baseUrl,
+      content,
+      this.fetcher
+    );
   }
 
   /**
@@ -197,6 +227,23 @@ export class ChatBot {
   }
 
   async reply(message: string, opts: ReplyOptions = {}): Promise<ReplyResult> {
+    // 1. Optional input judge — block before LLM call
+    let inputVerdict: JudgeVerdict | undefined;
+    if (this.guards.inputJudge) {
+      inputVerdict = await this.judge(this.guards.inputJudge, message);
+      if (inputVerdict.decision === "BLOCK") {
+        return {
+          reply: "I can't process that request. Please ask in a different way.",
+          usedProvider: this.steps[0]!.provider,
+          usedModel: this.steps[0]!.model,
+          guardWarnings: [],
+          judges: { input: inputVerdict },
+          attempts: [],
+          blockedByInputJudge: true
+        };
+      }
+    }
+
     const systemPrompt = opts.systemPrompt ?? this.cachedSystemPrompt;
     const messages: Message[] = [
       { role: "system", content: systemPrompt },
@@ -211,13 +258,26 @@ export class ChatBot {
         const result = await this.callProvider(step, messages);
         attempts.push({ provider: step.provider, model: step.model, status: "ok", latencyMs: Date.now() - t0 });
         const guard = checkForbiddenPhrases(result.reply);
-        const finalReply = guard.ok ? result.reply : stripForbidden(result.reply);
+        let finalReply = guard.ok ? result.reply : stripForbidden(result.reply);
+
+        // 2. Optional output judge — block dangerous output
+        let outputVerdict: JudgeVerdict | undefined;
+        if (this.guards.outputJudge) {
+          outputVerdict = await this.judge(this.guards.outputJudge, finalReply);
+          if (outputVerdict.decision === "BLOCK") {
+            finalReply = "Let me check with the owner and get back to you on that.";
+          }
+        }
+
         return {
           reply: finalReply,
           usedProvider: step.provider,
           usedModel: step.model,
           ...(result.usage ? { usage: result.usage } : {}),
           guardWarnings: guard.violations,
+          ...(inputVerdict || outputVerdict
+            ? { judges: { ...(inputVerdict ? { input: inputVerdict } : {}), ...(outputVerdict ? { output: outputVerdict } : {}) } }
+            : {}),
           attempts
         };
       } catch (err) {
