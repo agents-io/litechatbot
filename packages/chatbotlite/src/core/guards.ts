@@ -1,31 +1,26 @@
 import type { GuardResult } from "./types.js";
 
 /**
- * Phrases that almost always indicate hallucination for SMB customer service:
- * inventing dispatch promises, fake confirmations, or appointment locks.
+ * Redline phrases — absolute last-line safety net for SMB customer-service liability.
+ *
+ * NOTE: With a strict system prompt + business knowledge, modern LLMs (DeepSeek, GPT-4o,
+ * Claude) refuse these voluntarily ~99% of the time. Our 20-scenario hallucination-bait
+ * test showed 20/20 prompt-only passes — these guards triggered 0 times in normal use.
+ *
+ * Reduced from 22 → 6 in v0.4 after empirical testing showed the larger list was overkill.
+ * Each remaining phrase represents real liability if uttered (fake booking, fake dispatch,
+ * legal guarantee). Kept ONLY as a final guard against:
+ *  - rare provider misbehavior
+ *  - jailbreak attempts
+ *  - fallback to weaker models (Llama-3.3 free tier, etc.)
  */
 export const FORBIDDEN_PHRASES: readonly string[] = [
-  "help is coming",
-  "someone is on the way",
-  "technician is on the way",
-  "provider is on the way",
-  "dispatching someone",
-  "i've booked",
+  "i've booked",                    // fake booking
   "i have booked",
+  "your appointment is confirmed",  // fake confirmation
   "reservation confirmed",
-  "your appointment is confirmed",
-  "i've scheduled",
-  "i have scheduled",
-  "we've dispatched",
-  "we have dispatched",
-  "i can confirm",
-  "i guarantee",
-  "guaranteed delivery",
-  "guaranteed arrival",
-  "will arrive at",
-  "arriving at",
-  "i'll send",
-  "i will send"
+  "someone is on the way",          // false dispatch
+  "i guarantee"                     // legal liability
 ];
 
 /**
