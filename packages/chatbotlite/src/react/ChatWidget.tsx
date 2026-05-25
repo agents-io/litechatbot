@@ -31,6 +31,12 @@ interface ChatWidgetCommonProps {
     /** Max number of files per message (default 5). */
     maxFiles?: number;
   };
+  /** Voice input (🎙️ next to input). Uses Web Speech API — browser-native, free. */
+  voice?: {
+    enabled: boolean;
+    /** BCP-47 language tag (default "en-US"). */
+    lang?: string;
+  };
 }
 
 interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
@@ -120,6 +126,13 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const maxSizeMb = attachCfg?.maxSizeMb ?? 10;
   const maxFiles = attachCfg?.maxFiles ?? 5;
 
+  const voiceCfg = props.voice;
+  const voiceEnabled = voiceCfg?.enabled === true;
+  const voiceLang = voiceCfg?.lang ?? "en-US";
+  const speechSupported = typeof window !== "undefined" &&
+    (Boolean((window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition) ||
+      Boolean((window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition));
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: "g0", role: "assistant", content: resolvedGreeting, ts: Date.now() }
@@ -130,6 +143,41 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [voiceListening, setVoiceListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+
+  function toggleVoice(): void {
+    if (!speechSupported) return;
+    if (voiceListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Ctor = (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any })
+      .SpeechRecognition ??
+      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any })
+        .webkitSpeechRecognition;
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.lang = voiceLang;
+    rec.continuous = false;
+    rec.interimResults = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let transcript = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      setInput(transcript);
+    };
+    rec.onend = () => setVoiceListening(false);
+    rec.onerror = () => setVoiceListening(false);
+    recognitionRef.current = rec;
+    setVoiceListening(true);
+    rec.start();
+  }
 
   function addFiles(picked: FileList | File[]): void {
     const arr = Array.from(picked).filter((f) => f.size <= maxSizeMb * 1024 * 1024);
@@ -525,6 +573,25 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     }}
                   >📎</button>
                 </>
+              )}
+              {voiceEnabled && speechSupported && (
+                <button
+                  onClick={toggleVoice}
+                  disabled={sending}
+                  aria-label={voiceListening ? "Stop recording" : "Start voice input"}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: voiceListening ? primary : SURFACE_MUTED,
+                    color: voiceListening ? onPrimary : TEXT_BODY,
+                    border: `1px solid ${voiceListening ? primary : BORDER}`,
+                    cursor: sending ? "default" : "pointer",
+                    opacity: sending ? 0.4 : 1,
+                    fontSize: 16,
+                    transition: "background 120ms ease, color 120ms ease, border-color 120ms ease"
+                  }}
+                >🎙️</button>
               )}
             <input
               ref={inputRef}
