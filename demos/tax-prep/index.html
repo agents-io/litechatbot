@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MaxTax — Online personal tax filing in Canada</title>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; margin: 0; background: #fef2f2; color: #0f172a; }
+  header { padding: 16px 32px; background: white; border-bottom: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-size: 18px; font-weight: bold; }
+  .brand .red { color: #dc2626; }
+  nav a { margin-left: 20px; color: #0f172a; text-decoration: none; font-size: 14px; }
+  .hero { padding: 60px 32px 30px; text-align: center; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 38px; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .sub { color: #64748b; font-size: 17px; }
+  .pricing { max-width: 880px; margin: 40px auto; padding: 0 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .tier { background: white; padding: 20px; border-radius: 12px; border: 1px solid #fecaca; text-align: center; }
+  .tier h3 { margin: 0 0 8px; font-size: 14px; color: #64748b; }
+  .tier .price { font-size: 28px; font-weight: 700; color: #dc2626; }
+  .tier .price small { font-size: 14px; color: #64748b; font-weight: 400; }
+  .tier p { color: #64748b; font-size: 13px; margin: 8px 0 0; }
+  footer { padding: 40px 32px; text-align: center; color: #94a3b8; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Max<span class="red">Tax</span></div>
+  <nav>
+    <a href="#">Pricing</a>
+    <a href="#">Process</a>
+    <a href="#">中文</a>
+    <a href="#">ਪੰਜਾਬੀ</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Send us your documents. We take it from here.</h1>
+  <p class="sub">Personal tax returns handled for you, start to finish. 100% online, from $40.</p>
+</section>
+
+<section class="pricing">
+  <div class="tier"><h3>Student / First-time</h3><div class="price">$40</div><p>1 income source · tuition credits</p></div>
+  <div class="tier"><h3>Simple T1</h3><div class="price">$50</div><p>Employment + standard credits</p></div>
+  <div class="tier"><h3>Standard T1</h3><div class="price">$80</div><p>Multiple T4s + investments</p></div>
+  <div class="tier"><h3>Complex T1</h3><div class="price">$120<small>+</small></div><p>Self-employed / rental / catch-up</p></div>
+</section>
+
+<footer>MaxTax — Demo tax service powered by chatbotlite.</footer>
+
+<script src="https://unpkg.com/chatbotlite@latest/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat?demo=tax-prep",
+    title: "MaxTax · Assistant",
+    greeting: "Hi! Ask about pricing, documents to send, or our process. I support English, 中文, and ਪੰਜਾਬੀ.",
+    theme: { primary: "#dc2626" },
+    attach: { enabled: false },
+    voice: { enabled: true },
+    tools: {
+      uploadForReview: {
+        handler: async ({ files, purpose }) => ({ status: "received", filename: files[0]?.name, count: files.length })
+      }
+    }
+  });
+</script>
+</body>
+</html>

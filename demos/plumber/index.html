@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Plumbing — Vancouver &amp; Burnaby</title>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; margin: 0; background: #f1f5f9; color: #0f172a; }
+  header { background: #1e3a8a; color: white; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-weight: bold; font-size: 18px; }
+  nav a { color: white; text-decoration: none; margin-left: 24px; font-size: 14px; }
+  .hero { max-width: 880px; margin: 0 auto; padding: 64px 32px 32px; text-align: center; }
+  h1 { font-size: 42px; margin: 0 0 12px; letter-spacing: -0.025em; line-height: 1.1; }
+  .sub { color: #475569; font-size: 17px; max-width: 540px; margin: 0 auto; }
+  .services { max-width: 880px; margin: 40px auto; padding: 0 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .svc { background: white; border-radius: 10px; padding: 18px; border: 1px solid #e2e8f0; }
+  .svc-icon { font-size: 24px; }
+  .svc h3 { margin: 8px 0 4px; font-size: 15px; }
+  .svc .price { font-weight: 600; color: #1e3a8a; }
+  .svc .desc { color: #64748b; font-size: 13px; margin: 4px 0 0; }
+  footer { padding: 40px 32px; text-align: center; color: #94a3b8; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🔧 Acme Plumbing</div>
+  <nav>
+    <a href="#">Services</a>
+    <a href="#">Service area</a>
+    <a href="#">Contact</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Fast, honest plumbing in Vancouver &amp; Burnaby</h1>
+  <p class="sub">Got a leak? Send us a photo and we'll quote the inspection on the spot.</p>
+</section>
+
+<section class="services">
+  <div class="svc"><div class="svc-icon">💧</div><h3>Sink leak inspection</h3><p class="desc">First-visit assessment + quote</p><p class="price">$95</p></div>
+  <div class="svc"><div class="svc-icon">🚽</div><h3>Toilet unclogging</h3><p class="desc">Most jobs done in &lt;1 hour</p><p class="price">$85-150</p></div>
+  <div class="svc"><div class="svc-icon">🔥</div><h3>Faucet replacement</h3><p class="desc">Labor + parts (parts billed separately)</p><p class="price">$120-200</p></div>
+  <div class="svc"><div class="svc-icon">⚠️</div><h3>Burst pipe emergency</h3><p class="desc">Owner reviews directly</p><p class="price">Urgent</p></div>
+</section>
+
+<footer>Acme Plumbing — Demo storefront powered by chatbotlite. Click the bubble to try the chatbot.</footer>
+
+<script src="https://unpkg.com/chatbotlite@latest/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat?demo=plumber",
+    title: "Acme · Chat",
+    greeting: "Hi! Got a leak? Send me a photo and I'll quote inspection.",
+    theme: { primary: "#1e3a8a" },
+    attach: { enabled: true, accept: ["image/*"], maxSizeMb: 5 },
+    voice: { enabled: true },
+    tools: {
+      requestPayment: {
+        showInterac: true,
+        stripeLink: "https://buy.stripe.com/test_demo",
+        onPick: async ({ method, amount, currency }) => ({ status: "opened", method })
+      }
+    }
+  });
+</script>
+</body>
+</html>

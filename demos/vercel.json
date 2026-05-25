@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "echo 'No build needed — static HTML + serverless API'",
+  "outputDirectory": ".",
+  "functions": {
+    "api/chat.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/shopify-store", "destination": "/shopify-store/index.html" },
+    { "source": "/plumber", "destination": "/plumber/index.html" },
+    { "source": "/restaurant", "destination": "/restaurant/index.html" },
+    { "source": "/dentist", "destination": "/dentist/index.html" },
+    { "source": "/tax-prep", "destination": "/tax-prep/index.html" },
+    { "source": "/yoga-studio", "destination": "/yoga-studio/index.html" }
+  ]
+}

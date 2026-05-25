@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bella Italia — Yaletown, Vancouver</title>
+<style>
+  body { font-family: 'Georgia', serif; margin: 0; background: #f5f0e8; color: #2d1f10; }
+  header { padding: 16px 32px; border-bottom: 1px solid #d4c4a8; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-size: 22px; font-weight: bold; color: #8B0000; }
+  nav a { margin-left: 20px; color: #2d1f10; text-decoration: none; font-size: 14px; font-family: -apple-system, sans-serif; }
+  .hero { padding: 60px 32px 30px; text-align: center; max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 46px; margin: 0 0 14px; font-style: italic; }
+  .sub { color: #6b5b4c; font-size: 18px; }
+  .menu { max-width: 880px; margin: 40px auto; padding: 0 32px; }
+  .menu-section { margin-bottom: 40px; }
+  .menu-section h2 { font-size: 22px; color: #8B0000; border-bottom: 1px solid #d4c4a8; padding-bottom: 8px; }
+  .item { display: flex; justify-content: space-between; margin: 10px 0; font-family: -apple-system, sans-serif; font-size: 15px; }
+  .item .price { color: #6b5b4c; }
+  footer { padding: 40px 32px; text-align: center; color: #94a3b8; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Bella Italia</div>
+  <nav>
+    <a href="#menu">Menu</a>
+    <a href="#">Hours</a>
+    <a href="#">Reserve</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Cucina Italiana, Yaletown</h1>
+  <p class="sub">Wood-fired pizza, hand-cut pasta, and a wine list that doesn't disappoint.</p>
+</section>
+
+<section class="menu" id="menu">
+  <div class="menu-section">
+    <h2>Pasta</h2>
+    <div class="item"><span>Cacio e Pepe</span><span class="price">$24</span></div>
+    <div class="item"><span>Tagliatelle alla Bolognese</span><span class="price">$28</span></div>
+    <div class="item"><span>Wild Mushroom Ravioli</span><span class="price">$26</span></div>
+  </div>
+  <div class="menu-section">
+    <h2>Wood-fired Pizza</h2>
+    <div class="item"><span>Margherita</span><span class="price">$22</span></div>
+    <div class="item"><span>Quattro Formaggi</span><span class="price">$26</span></div>
+    <div class="item"><span>Diavola</span><span class="price">$25</span></div>
+  </div>
+  <div class="menu-section">
+    <h2>Mains</h2>
+    <div class="item"><span>Branzino</span><span class="price">$42</span></div>
+    <div class="item"><span>Osso buco</span><span class="price">$46</span></div>
+    <div class="item"><span>Eggplant parmigiana</span><span class="price">$24</span></div>
+  </div>
+</section>
+
+<footer>Bella Italia — Demo restaurant powered by chatbotlite.</footer>
+
+<script src="https://unpkg.com/chatbotlite@latest/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat?demo=restaurant",
+    title: "Bella · Concierge",
+    greeting: "Ciao! Ask about menu, dietary options, or book a table.",
+    theme: { primary: "#8B0000" },
+    voice: { enabled: true },
+    tools: {
+      scheduleCallback: {
+        getAvailableSlots: async ({ durationMin }) => {
+          const now = new Date();
+          const slots = [];
+          for (let i = 1; i <= 6; i++) {
+            const d = new Date(now);
+            d.setDate(d.getDate() + Math.ceil(i / 3));
+            d.setHours(18 + (i % 2) * 2, 0, 0, 0);
+            slots.push(d.toISOString());
+          }
+          return slots;
+        },
+        onConfirm: async ({ slot }) => ({ confirmedAt: slot, joinUrl: "https://bella-italia.demo/booking" })
+      }
+    }
+  });
+</script>
+</body>
+</html>

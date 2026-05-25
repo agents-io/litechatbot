@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunrise Yoga — Kitsilano, Vancouver</title>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; margin: 0; background: #fffaf5; color: #422006; line-height: 1.6; }
+  header { padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-size: 20px; font-weight: 300; letter-spacing: 0.04em; }
+  nav a { margin-left: 20px; color: #422006; text-decoration: none; font-size: 14px; }
+  .hero { padding: 80px 32px 40px; text-align: center; max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 44px; font-weight: 300; margin: 0 0 14px; letter-spacing: -0.02em; }
+  .sub { color: #78716c; font-size: 18px; }
+  .classes { max-width: 880px; margin: 30px auto; padding: 0 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .class { background: white; padding: 22px; border-radius: 14px; border: 1px solid #fed7aa; }
+  .class .name { font-size: 17px; font-weight: 500; }
+  .class .duration { color: #78716c; font-size: 13px; margin: 4px 0 8px; }
+  .class .price { font-weight: 600; color: #ea580c; }
+  footer { padding: 40px 32px; text-align: center; color: #a8a29e; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🧘 SUNRISE YOGA</div>
+  <nav>
+    <a href="#">Classes</a>
+    <a href="#">Schedule</a>
+    <a href="#">First class free</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Slow down. Breathe. Begin.</h1>
+  <p class="sub">Boutique yoga studio in Kitsilano. First class is free — bring your mat or rent ours.</p>
+</section>
+
+<section class="classes">
+  <div class="class"><div class="name">Vinyasa Flow</div><div class="duration">60 min · All levels</div><div class="price">$22 drop-in</div></div>
+  <div class="class"><div class="name">Yin / Restorative</div><div class="duration">75 min · All levels</div><div class="price">$22 drop-in</div></div>
+  <div class="class"><div class="name">Hot Power Yoga</div><div class="duration">60 min · Intermediate</div><div class="price">$25 drop-in</div></div>
+  <div class="class"><div class="name">Beginners' Foundation</div><div class="duration">45 min · Brand new</div><div class="price">$18 drop-in</div></div>
+  <div class="class"><div class="name">Prenatal</div><div class="duration">60 min · All trimesters</div><div class="price">$24 drop-in</div></div>
+</section>
+
+<footer>Sunrise Yoga — Demo studio powered by chatbotlite.</footer>
+
+<script src="https://unpkg.com/chatbotlite@latest/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat?demo=yoga-studio",
+    title: "Sunrise · Concierge",
+    greeting: "Hi! Ask about classes, drop-in pricing, or chat with an instructor.",
+    theme: { primary: "#ea580c" },
+    voice: { enabled: true },
+    tools: {
+      scheduleCallback: {
+        getAvailableSlots: async ({ durationMin }) => {
+          const now = new Date();
+          const slots = [];
+          for (let i = 1; i <= 6; i++) {
+            const d = new Date(now);
+            d.setDate(d.getDate() + Math.ceil(i / 2));
+            d.setHours(10 + (i % 4) * 2, 0, 0, 0);
+            slots.push(d.toISOString());
+          }
+          return slots;
+        },
+        onConfirm: async ({ slot }) => ({ confirmedAt: slot })
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smile Care Dental — Family dentistry in Burnaby</title>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; margin: 0; background: #f0fdfa; color: #134e4a; }
+  header { background: white; padding: 16px 32px; border-bottom: 1px solid #ccfbf1; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-size: 18px; font-weight: bold; color: #0d9488; }
+  nav a { margin-left: 20px; color: #134e4a; text-decoration: none; font-size: 14px; }
+  .hero { padding: 60px 32px 30px; text-align: center; max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 38px; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .sub { color: #5f8281; font-size: 17px; }
+  .features { max-width: 880px; margin: 40px auto; padding: 0 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .feature { background: white; padding: 20px; border-radius: 10px; border: 1px solid #ccfbf1; }
+  .feature .icon { font-size: 26px; }
+  .feature h3 { margin: 8px 0 4px; font-size: 16px; }
+  .feature p { color: #5f8281; font-size: 14px; margin: 0; }
+  footer { padding: 40px 32px; text-align: center; color: #5f8281; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🦷 Smile Care Dental</div>
+  <nav>
+    <a href="#">Services</a>
+    <a href="#">Insurance</a>
+    <a href="#">Book</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Family dentistry in Burnaby</h1>
+  <p class="sub">Dr. Sarah Chen, DDS · We direct-bill most major Canadian insurance.</p>
+</section>
+
+<section class="features">
+  <div class="feature"><div class="icon">🪥</div><h3>Cleanings &amp; exams</h3><p>$180 · We bill your insurance directly</p></div>
+  <div class="feature"><div class="icon">✨</div><h3>Whitening</h3><p>$450 in-office single visit</p></div>
+  <div class="feature"><div class="icon">👑</div><h3>Crowns &amp; bridges</h3><p>Same-week scheduling available</p></div>
+  <div class="feature"><div class="icon">🩹</div><h3>Emergency visit</h3><p>$200 · Same-day slots most days</p></div>
+</section>
+
+<footer>Smile Care Dental — Demo practice powered by chatbotlite.</footer>
+
+<script src="https://unpkg.com/chatbotlite@latest/dist/embed.global.js"></script>
+<script>
+  chatbotlite.mount({
+    endpoint: "/api/chat?demo=dentist",
+    title: "Smile Care · Front Desk",
+    greeting: "Hi! Ask about services, insurance coverage, or book your visit.",
+    theme: { primary: "#0d9488" },
+    attach: { enabled: true, accept: ["image/*", ".pdf"], maxSizeMb: 5 },
+    voice: { enabled: true },
+    tools: {
+      uploadForReview: {
+        handler: async ({ files, purpose }) => ({ status: "received", filename: files[0]?.name })
+      },
+      scheduleCallback: {
+        getAvailableSlots: async ({ durationMin }) => {
+          const now = new Date();
+          const slots = [];
+          for (let i = 1; i <= 6; i++) {
+            const d = new Date(now);
+            d.setDate(d.getDate() + i);
+            d.setHours(9 + i, 30, 0, 0);
+            slots.push(d.toISOString());
+          }
+          return slots;
+        },
+        onConfirm: async ({ slot }) => ({ confirmedAt: slot })
+      }
+    }
+  });
+</script>
+</body>
+</html>
