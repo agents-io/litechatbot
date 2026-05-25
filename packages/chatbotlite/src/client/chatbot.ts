@@ -96,12 +96,12 @@ export class ChatBot {
           latencyMs: Date.now() - t0
         });
         if (!isRetryableError(err)) {
-          throw new Error(`litechatbot: ${step.provider}/${step.model} failed (non-retryable). ${errMsg}`);
+          throw new Error(`chatbotlite: ${step.provider}/${step.model} failed (non-retryable). ${errMsg}`);
         }
       }
     }
     const summary = attempts.map((a) => `${a.provider}/${a.model}:${a.error ?? "ok"}`).join(" → ");
-    throw new Error(`litechatbot: all chain steps failed. Trace: ${summary}. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    throw new Error(`chatbotlite: all chain steps failed. Trace: ${summary}. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
   }
 
   private async callProvider(step: ChainStep, messages: Message[]): Promise<{ reply: string; usage?: { prompt_tokens?: number; completion_tokens?: number } }> {
@@ -160,7 +160,7 @@ function resolveChain(providers: ProviderConfig): ChainStep[] {
   }
   const orderedProviders = Object.keys(keys).filter((k) => isKnownProvider(k) && keys[k as Provider]) as Provider[];
   if (orderedProviders.length === 0) {
-    throw new Error("litechatbot: at least one provider key is required.");
+    throw new Error("chatbotlite: at least one provider key is required.");
   }
   return orderedProviders.map((provider) => ({
     provider,
@@ -180,14 +180,14 @@ function normalizeChainEntry(entry: ChainEntry, keys: Partial<Record<Provider, s
     spec = entry;
   } else {
     if (!isKnownProvider(entry.provider)) {
-      throw new Error(`litechatbot: unknown provider "${entry.provider}" in chain entry.`);
+      throw new Error(`chatbotlite: unknown provider "${entry.provider}" in chain entry.`);
     }
     provider = entry.provider;
     model = entry.model ?? PROVIDER_ENDPOINTS[provider].defaultModel;
     spec = `${provider}/${model}`;
   }
   if (!keys[provider]) {
-    throw new Error(`litechatbot: chain step "${spec}" needs a key for provider "${provider}" but none was provided.`);
+    throw new Error(`chatbotlite: chain step "${spec}" needs a key for provider "${provider}" but none was provided.`);
   }
   return { provider, model, spec };
 }

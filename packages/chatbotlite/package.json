@@ -1,16 +1,16 @@
 {
-  "name": "litechatbot",
+  "name": "chatbotlite",
   "version": "0.2.0",
-  "description": "Drop-in chatbot SDK + React widget. Multi-LLM with fallback, business config, anti-hallucination guards. One import, one config — your site has a chatbot.",
+  "description": "Drop-in AI chatbot SDK + React widget. Multi-LLM with fallback, business config, anti-hallucination guards. One import, one config — your site has a chatbot.",
   "license": "Apache-2.0",
   "author": "agents.io",
-  "homepage": "https://github.com/agents-io/litechatbot",
+  "homepage": "https://github.com/agents-io/chatbotlite",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agents-io/litechatbot.git",
-    "directory": "packages/litechatbot"
+    "url": "https://github.com/agents-io/chatbotlite.git",
+    "directory": "packages/chatbotlite"
   },
-  "bugs": "https://github.com/agents-io/litechatbot/issues",
+  "bugs": "https://github.com/agents-io/chatbotlite/issues",
   "keywords": [
     "chatbot",
     "ai",

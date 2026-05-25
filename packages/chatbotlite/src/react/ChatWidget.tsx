@@ -17,7 +17,7 @@ interface ChatWidgetCommonProps {
   subtitle?: string;
   /** Initial greeting (defaults to "Hi! How can we help?"). */
   greeting?: string;
-  /** Show "Powered by litechatbot" footer (default true). Free tier marker. */
+  /** Show "Powered by chatbotlite" footer (default true). Free tier marker. */
   showBranding?: boolean;
   /** Position of the launcher bubble. */
   position?: "bottom-right" | "bottom-left";
@@ -56,26 +56,26 @@ const TEXT_MUTED = "#64748b";
 const TEXT_FAINT = "#94a3b8";
 const FONT_STACK = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
 
-const STYLE_TAG_ID = "litechatbot-widget-styles";
+const STYLE_TAG_ID = "chatbotlite-widget-styles";
 const KEYFRAMES = `
-@keyframes litechatbot-pop { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
-@keyframes litechatbot-slide { 0% { opacity: 0; transform: translateY(16px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
-@keyframes litechatbot-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes litechatbot-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
-.litechatbot-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); }
-.litechatbot-launcher:hover { transform: translateY(-2px) scale(1.04); }
-.litechatbot-launcher:active { transform: translateY(0) scale(0.98); }
-.litechatbot-close { transition: background 120ms ease; }
-.litechatbot-close:hover { background: rgba(255,255,255,0.16); }
-.litechatbot-send { transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }
-.litechatbot-send:not(:disabled):hover { transform: translateY(-1px); }
-.litechatbot-send:not(:disabled):active { transform: translateY(0); }
-.litechatbot-input:focus { box-shadow: 0 0 0 3px rgba(15,23,42,0.06); }
-.litechatbot-msg { animation: litechatbot-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
-.litechatbot-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: litechatbot-dot 1.2s ease-in-out infinite; }
-.litechatbot-dot:nth-child(2) { animation-delay: 0.15s; }
-.litechatbot-dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
-.litechatbot-brand:hover { color: ${TEXT_MUTED} !important; }
+@keyframes chatbotlite-pop { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes chatbotlite-slide { 0% { opacity: 0; transform: translateY(16px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes chatbotlite-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes chatbotlite-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+.chatbotlite-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); }
+.chatbotlite-launcher:hover { transform: translateY(-2px) scale(1.04); }
+.chatbotlite-launcher:active { transform: translateY(0) scale(0.98); }
+.chatbotlite-close { transition: background 120ms ease; }
+.chatbotlite-close:hover { background: rgba(255,255,255,0.16); }
+.chatbotlite-send { transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }
+.chatbotlite-send:not(:disabled):hover { transform: translateY(-1px); }
+.chatbotlite-send:not(:disabled):active { transform: translateY(0); }
+.chatbotlite-input:focus { box-shadow: 0 0 0 3px rgba(15,23,42,0.06); }
+.chatbotlite-msg { animation: chatbotlite-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
+.chatbotlite-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: chatbotlite-dot 1.2s ease-in-out infinite; }
+.chatbotlite-dot:nth-child(2) { animation-delay: 0.15s; }
+.chatbotlite-dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
+.chatbotlite-brand:hover { color: ${TEXT_MUTED} !important; }
 `;
 
 function ensureStyles(): void {
@@ -180,7 +180,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
     <>
       {!open && (
         <button
-          className="litechatbot-launcher"
+          className="chatbotlite-launcher"
           onClick={() => setOpen(true)}
           aria-label="Open chat"
           style={{
@@ -198,7 +198,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             cursor: "pointer",
             boxShadow: "0 12px 28px -8px rgba(15,23,42,0.32), 0 4px 8px -2px rgba(15,23,42,0.12)",
             zIndex: 99999,
-            animation: "litechatbot-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+            animation: "chatbotlite-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center"
@@ -229,7 +229,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             overflow: "hidden",
             fontFamily: FONT_STACK,
             zIndex: 99999,
-            animation: "litechatbot-slide 280ms cubic-bezier(0.16, 1, 0.3, 1)"
+            animation: "chatbotlite-slide 280ms cubic-bezier(0.16, 1, 0.3, 1)"
           }}
         >
           <header style={{
@@ -252,7 +252,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
               )}
             </div>
             <button
-              className="litechatbot-close"
+              className="chatbotlite-close"
               onClick={() => setOpen(false)}
               aria-label="Close chat"
               style={{
@@ -290,7 +290,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             {messages.map((m) => (
               <div
                 key={m.id}
-                className="litechatbot-msg"
+                className="chatbotlite-msg"
                 style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "82%",
@@ -314,7 +314,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             ))}
             {sending && (
               <div
-                className="litechatbot-msg"
+                className="chatbotlite-msg"
                 style={{
                   alignSelf: "flex-start",
                   padding: "12px 14px",
@@ -324,9 +324,9 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                   boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
                 }}
               >
-                <span className="litechatbot-dot" />
-                <span className="litechatbot-dot" />
-                <span className="litechatbot-dot" />
+                <span className="chatbotlite-dot" />
+                <span className="chatbotlite-dot" />
+                <span className="chatbotlite-dot" />
               </div>
             )}
           </div>
@@ -340,7 +340,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
           }}>
             <input
               ref={inputRef}
-              className="litechatbot-input"
+              className="chatbotlite-input"
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -361,7 +361,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
               }}
             />
             <button
-              className="litechatbot-send"
+              className="chatbotlite-send"
               onClick={() => void send()}
               disabled={sending || !input.trim()}
               aria-label="Send message"
@@ -387,8 +387,8 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
 
           {showBranding && (
             <a
-              className="litechatbot-brand"
-              href="https://github.com/agents-io/litechatbot"
+              className="chatbotlite-brand"
+              href="https://github.com/agents-io/chatbotlite"
               target="_blank"
               rel="noreferrer"
               style={{
@@ -404,7 +404,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                 transition: "color 120ms ease"
               }}
             >
-              {BOLT} Powered by litechatbot
+              {BOLT} Powered by chatbotlite
             </a>
           )}
         </div>

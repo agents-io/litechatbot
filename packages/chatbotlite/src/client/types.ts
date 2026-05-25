@@ -100,17 +100,17 @@ export function parseChainSpec(spec: string): { provider: Provider; model: strin
   const slash = spec.indexOf("/");
   if (slash === -1) {
     if (!PROVIDER_NAMES.has(spec)) {
-      throw new Error(`litechatbot: unknown provider "${spec}". Use "provider/model" or a known provider name.`);
+      throw new Error(`chatbotlite: unknown provider "${spec}". Use "provider/model" or a known provider name.`);
     }
     return { provider: spec as Provider, model: null };
   }
   const provider = spec.slice(0, slash);
   const model = spec.slice(slash + 1);
   if (!PROVIDER_NAMES.has(provider)) {
-    throw new Error(`litechatbot: unknown provider "${provider}" in chain spec "${spec}".`);
+    throw new Error(`chatbotlite: unknown provider "${provider}" in chain spec "${spec}".`);
   }
   if (!model) {
-    throw new Error(`litechatbot: empty model name in chain spec "${spec}".`);
+    throw new Error(`chatbotlite: empty model name in chain spec "${spec}".`);
   }
   return { provider: provider as Provider, model };
 }

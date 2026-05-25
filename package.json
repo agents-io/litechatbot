@@ -1,5 +1,5 @@
 {
-  "name": "litechatbot-monorepo",
+  "name": "chatbotlite-monorepo",
   "version": "0.0.0",
   "private": true,
   "description": "Drop-in chatbot SDK for any website. Multi-LLM with fallback, business config, anti-hallucination guards, React widget.",
@@ -7,9 +7,9 @@
   "author": "agents.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agents-io/litechatbot.git"
+    "url": "https://github.com/agents-io/chatbotlite.git"
   },
-  "homepage": "https://github.com/agents-io/litechatbot",
+  "homepage": "https://github.com/agents-io/chatbotlite",
   "workspaces": [
     "packages/*",
     "examples/*"
