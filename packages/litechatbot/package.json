@@ -1,6 +1,6 @@
 {
   "name": "litechatbot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Drop-in chatbot SDK + React widget. Multi-LLM with fallback, business config, anti-hallucination guards. One import, one config — your site has a chatbot.",
   "license": "Apache-2.0",
   "author": "agents.io",

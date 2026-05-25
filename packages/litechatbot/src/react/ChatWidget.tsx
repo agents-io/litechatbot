@@ -1,19 +1,20 @@
-import { useState, useRef, useEffect, useMemo, type ReactElement } from "react";
+import { useState, useRef, useEffect, useMemo, type ReactElement, type CSSProperties } from "react";
 import type { BusinessConfig, Message } from "../core/types.js";
 import { ChatBot } from "../client/chatbot.js";
 import type { ProviderConfig } from "../client/types.js";
 
-export interface ChatWidgetProps {
-  /** Business config — name, services, hours, area, policies. */
-  business: BusinessConfig;
-  /** Provider chain + API keys. */
-  providers: ProviderConfig;
+interface ChatWidgetCommonProps {
   /** Optional theme overrides. */
   theme?: {
+    /** Brand color used on launcher, header, user message bubbles, send button. */
     primary?: string;
-    background?: string;
-    text?: string;
+    /** Optional explicit text color for primary surfaces (defaults to white/contrast). */
+    onPrimary?: string;
   };
+  /** Header title shown when widget is open (defaults to business.name or "Chat"). */
+  title?: string;
+  /** Optional subtitle under the title (e.g. "We typically reply in minutes"). */
+  subtitle?: string;
   /** Initial greeting (defaults to "Hi! How can we help?"). */
   greeting?: string;
   /** Show "Powered by litechatbot" footer (default true). Free tier marker. */
@@ -22,45 +23,132 @@ export interface ChatWidgetProps {
   position?: "bottom-right" | "bottom-left";
 }
 
+interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
+  /** Business config — name, services, hours, area, policies. */
+  business: BusinessConfig;
+  /** Provider chain + API keys (client-side mode). Keys WILL be exposed. */
+  providers: ProviderConfig;
+  endpoint?: never;
+}
+
+interface ChatWidgetEndpointProps extends ChatWidgetCommonProps {
+  /** POST URL of your server route (e.g. "/api/chat"). Server should accept { message, transcript } and return { reply }. */
+  endpoint: string;
+  business?: never;
+  providers?: never;
+}
+
+export type ChatWidgetProps = ChatWidgetDirectProps | ChatWidgetEndpointProps;
+
 interface ChatMessage extends Message {
   id: string;
   ts: number;
 }
 
-const DEFAULT_THEME = {
-  primary: "#0f172a",
-  background: "#ffffff",
-  text: "#0f172a"
-};
+const BOLT = "\u26A1";
+const DEFAULT_PRIMARY = "#0f172a";
+const DEFAULT_ON_PRIMARY = "#ffffff";
+const SURFACE = "#ffffff";
+const SURFACE_MUTED = "#fafbfc";
+const BORDER = "#e5e7eb";
+const TEXT_BODY = "#0f172a";
+const TEXT_MUTED = "#64748b";
+const TEXT_FAINT = "#94a3b8";
+const FONT_STACK = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
 
-const BOLT = "⚡";
+const STYLE_TAG_ID = "litechatbot-widget-styles";
+const KEYFRAMES = `
+@keyframes litechatbot-pop { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes litechatbot-slide { 0% { opacity: 0; transform: translateY(16px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes litechatbot-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes litechatbot-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+.litechatbot-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); }
+.litechatbot-launcher:hover { transform: translateY(-2px) scale(1.04); }
+.litechatbot-launcher:active { transform: translateY(0) scale(0.98); }
+.litechatbot-close { transition: background 120ms ease; }
+.litechatbot-close:hover { background: rgba(255,255,255,0.16); }
+.litechatbot-send { transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }
+.litechatbot-send:not(:disabled):hover { transform: translateY(-1px); }
+.litechatbot-send:not(:disabled):active { transform: translateY(0); }
+.litechatbot-input:focus { box-shadow: 0 0 0 3px rgba(15,23,42,0.06); }
+.litechatbot-msg { animation: litechatbot-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
+.litechatbot-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: litechatbot-dot 1.2s ease-in-out infinite; }
+.litechatbot-dot:nth-child(2) { animation-delay: 0.15s; }
+.litechatbot-dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
+.litechatbot-brand:hover { color: ${TEXT_MUTED} !important; }
+`;
+
+function ensureStyles(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(STYLE_TAG_ID)) return;
+  const style = document.createElement("style");
+  style.id = STYLE_TAG_ID;
+  style.textContent = KEYFRAMES;
+  document.head.appendChild(style);
+}
 
 export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const {
-    business,
-    providers,
     theme: themeOverrides,
-    greeting = `Hi! I'm here for ${business.name}. How can we help?`,
+    title,
+    subtitle,
+    greeting,
     showBranding = true,
     position = "bottom-right"
   } = props;
 
-  const theme = { ...DEFAULT_THEME, ...themeOverrides };
+  const isEndpointMode = "endpoint" in props && typeof props.endpoint === "string";
+  const resolvedTitle = title ?? props.business?.name ?? "Chat";
+  const resolvedGreeting = greeting ?? (props.business
+    ? `Hi! I'm here for ${props.business.name}. How can we help?`
+    : "Hi! How can we help?");
+
+  const primary = themeOverrides?.primary ?? DEFAULT_PRIMARY;
+  const onPrimary = themeOverrides?.onPrimary ?? DEFAULT_ON_PRIMARY;
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: "g0", role: "assistant", content: greeting, ts: Date.now() }
+    { id: "g0", role: "assistant", content: resolvedGreeting, ts: Date.now() }
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const bot = useMemo(() => new ChatBot({ business, providers }), [business, providers]);
+  useEffect(() => { ensureStyles(); }, []);
+
+  const bot = useMemo(() => {
+    if (isEndpointMode) return null;
+    if (!props.business || !props.providers) return null;
+    return new ChatBot({ business: props.business, providers: props.providers });
+  }, [isEndpointMode, props.business, props.providers]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, open]);
+  }, [messages, sending, open]);
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      const t = setTimeout(() => inputRef.current?.focus(), 240);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [open]);
+
+  async function fetchReplyFromEndpoint(text: string, history: Message[]): Promise<string> {
+    const res = await fetch(props.endpoint!, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, transcript: history })
+    });
+    if (!res.ok) throw new Error(`Endpoint ${res.status}: ${await res.text().catch(() => "")}`);
+    const data = (await res.json()) as { reply?: string; error?: string };
+    if (data.error) throw new Error(data.error);
+    if (!data.reply) throw new Error("Endpoint returned no reply.");
+    return data.reply;
+  }
 
   async function send(): Promise<void> {
     const text = input.trim();
@@ -73,7 +161,9 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
       const history: Message[] = messages
         .filter((m) => m.role !== "system")
         .map((m) => ({ role: m.role, content: m.content }));
-      const { reply } = await bot.reply(text, { history });
+      const reply = isEndpointMode
+        ? await fetchReplyFromEndpoint(text, history)
+        : (await bot!.reply(text, { history })).reply;
       setMessages((prev) => [...prev, { id: `a${Date.now()}`, role: "assistant", content: reply, ts: Date.now() }]);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -83,32 +173,38 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
     }
   }
 
-  const launcherPos = position === "bottom-left" ? { left: 20 } : { right: 20 };
-  const panelPos = position === "bottom-left" ? { left: 20 } : { right: 20 };
+  const launcherPos: CSSProperties = position === "bottom-left" ? { left: 20 } : { right: 20 };
+  const panelPos: CSSProperties = position === "bottom-left" ? { left: 20 } : { right: 20 };
 
   return (
     <>
       {!open && (
         <button
+          className="litechatbot-launcher"
           onClick={() => setOpen(true)}
           aria-label="Open chat"
           style={{
             position: "fixed",
             bottom: 20,
             ...launcherPos,
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: theme.primary,
-            color: "#fff",
+            width: 60,
+            height: 60,
+            borderRadius: 18,
+            background: primary,
+            color: onPrimary,
             border: "none",
-            fontSize: 24,
+            fontSize: 28,
+            lineHeight: 1,
             cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-            zIndex: 99999
+            boxShadow: "0 12px 28px -8px rgba(15,23,42,0.32), 0 4px 8px -2px rgba(15,23,42,0.12)",
+            zIndex: 99999,
+            animation: "litechatbot-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
           }}
         >
-          {BOLT}
+          <span style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}>{BOLT}</span>
         </button>
       )}
 
@@ -120,93 +216,169 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             position: "fixed",
             bottom: 20,
             ...panelPos,
-            width: 360,
+            width: 380,
             maxWidth: "calc(100vw - 40px)",
-            height: 520,
+            height: 580,
             maxHeight: "calc(100vh - 40px)",
-            background: theme.background,
-            color: theme.text,
-            borderRadius: 14,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
+            background: SURFACE,
+            color: TEXT_BODY,
+            borderRadius: 20,
+            boxShadow: "0 24px 60px -16px rgba(15,23,42,0.32), 0 8px 24px -8px rgba(15,23,42,0.12), 0 0 0 1px rgba(15,23,42,0.04)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            zIndex: 99999
+            fontFamily: FONT_STACK,
+            zIndex: 99999,
+            animation: "litechatbot-slide 280ms cubic-bezier(0.16, 1, 0.3, 1)"
           }}
         >
           <header style={{
-            padding: "12px 16px",
-            background: theme.primary,
-            color: "#fff",
+            padding: "16px 18px",
+            background: primary,
+            color: onPrimary,
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center"
+            alignItems: "center",
+            gap: 12
           }}>
-            <strong>{business.name}</strong>
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+              <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {resolvedTitle}
+              </span>
+              {subtitle && (
+                <span style={{ fontSize: 12, opacity: 0.7, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {subtitle}
+                </span>
+              )}
+            </div>
             <button
+              className="litechatbot-close"
               onClick={() => setOpen(false)}
               aria-label="Close chat"
-              style={{ background: "transparent", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: onPrimary,
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                fontSize: 22,
+                lineHeight: 1,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0
+              }}
             >
-              ×
+              {"\u00D7"}
             </button>
           </header>
 
-          <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "16px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              background: SURFACE_MUTED
+            }}
+          >
             {messages.map((m) => (
               <div
                 key={m.id}
+                className="litechatbot-msg"
                 style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "80%",
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  background: m.role === "user" ? theme.primary : "#f1f5f9",
-                  color: m.role === "user" ? "#fff" : theme.text,
+                  maxWidth: "82%",
+                  padding: "9px 13px",
+                  borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  background: m.role === "user" ? primary : SURFACE,
+                  color: m.role === "user" ? onPrimary : TEXT_BODY,
+                  border: m.role === "user" ? "none" : `1px solid ${BORDER}`,
                   fontSize: 14,
-                  lineHeight: 1.4,
-                  whiteSpace: "pre-wrap"
+                  lineHeight: 1.5,
+                  letterSpacing: "-0.005em",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  boxShadow: m.role === "user"
+                    ? "0 1px 2px rgba(15,23,42,0.12)"
+                    : "0 1px 2px rgba(15,23,42,0.04)"
                 }}
               >
                 {m.content}
               </div>
             ))}
             {sending && (
-              <div style={{ alignSelf: "flex-start", padding: "8px 12px", color: "#94a3b8", fontSize: 13 }}>
-                typing…
+              <div
+                className="litechatbot-msg"
+                style={{
+                  alignSelf: "flex-start",
+                  padding: "12px 14px",
+                  borderRadius: "18px 18px 18px 4px",
+                  background: SURFACE,
+                  border: `1px solid ${BORDER}`,
+                  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+                }}
+              >
+                <span className="litechatbot-dot" />
+                <span className="litechatbot-dot" />
+                <span className="litechatbot-dot" />
               </div>
             )}
           </div>
 
-          <div style={{ display: "flex", padding: 10, borderTop: "1px solid #e2e8f0", gap: 8 }}>
+          <div style={{
+            display: "flex",
+            padding: 12,
+            gap: 8,
+            background: SURFACE,
+            borderTop: `1px solid ${BORDER}`
+          }}>
             <input
+              ref={inputRef}
+              className="litechatbot-input"
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
               placeholder="Type a message…"
               disabled={sending}
               style={{
                 flex: 1,
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
+                padding: "10px 14px",
+                borderRadius: 12,
+                border: `1px solid ${BORDER}`,
+                background: SURFACE_MUTED,
                 fontSize: 14,
-                outline: "none"
+                fontFamily: FONT_STACK,
+                color: TEXT_BODY,
+                outline: "none",
+                transition: "box-shadow 120ms ease, border-color 120ms ease"
               }}
             />
             <button
+              className="litechatbot-send"
               onClick={() => void send()}
               disabled={sending || !input.trim()}
+              aria-label="Send message"
               style={{
-                padding: "8px 14px",
-                borderRadius: 8,
-                background: theme.primary,
-                color: "#fff",
+                padding: "0 16px",
+                height: 40,
+                minWidth: 64,
+                borderRadius: 12,
+                background: primary,
+                color: onPrimary,
                 border: "none",
-                cursor: sending ? "default" : "pointer",
-                opacity: sending || !input.trim() ? 0.5 : 1
+                fontSize: 14,
+                fontWeight: 600,
+                fontFamily: FONT_STACK,
+                cursor: sending || !input.trim() ? "default" : "pointer",
+                opacity: sending || !input.trim() ? 0.4 : 1,
+                boxShadow: "0 2px 6px -1px rgba(15,23,42,0.18)"
               }}
             >
               Send
@@ -215,16 +387,21 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
 
           {showBranding && (
             <a
+              className="litechatbot-brand"
               href="https://github.com/agents-io/litechatbot"
               target="_blank"
               rel="noreferrer"
               style={{
-                padding: "6px 12px",
+                padding: "8px 12px",
                 fontSize: 11,
-                color: "#94a3b8",
+                fontWeight: 500,
+                color: TEXT_FAINT,
                 textAlign: "center",
                 textDecoration: "none",
-                borderTop: "1px solid #f1f5f9"
+                background: SURFACE,
+                borderTop: `1px solid ${BORDER}`,
+                letterSpacing: "0.01em",
+                transition: "color 120ms ease"
               }}
             >
               {BOLT} Powered by litechatbot
