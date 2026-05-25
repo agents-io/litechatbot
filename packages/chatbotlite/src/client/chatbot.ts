@@ -4,7 +4,7 @@ import { checkForbiddenPhrases, stripForbidden } from "../core/guards.js";
 import { runJudge, type GuardsConfig, type JudgeVerdict } from "../core/judges.js";
 import type { Provider, ProviderConfig, ClientOptions, ChainStep, ChainEntry, AttemptInfo } from "./types.js";
 import { isKnownProvider } from "./types.js";
-import { PROVIDER_ENDPOINTS, isRetryableError } from "./providers.js";
+import { PROVIDER_ENDPOINTS, isRetryableError, fileToDataUrl } from "./providers.js";
 
 export interface ChatBotInit {
   /** Markdown describing the business — services, hours, policies, anything. */
@@ -22,6 +22,11 @@ export interface ReplyOptions {
   history?: Message[];
   /** Override system prompt — advanced use only. */
   systemPrompt?: string;
+}
+
+export interface ReplyWithMediaOptions extends ReplyOptions {
+  /** Image files (PNG/JPEG/WebP) to include alongside the message. Skipped on providers without vision. */
+  images?: (File | Blob)[];
 }
 
 export interface ReplyResult {
@@ -224,6 +229,91 @@ export class ChatBot {
         controller.close();
       }
     });
+  }
+
+  /**
+   * Reply to a message with optional image attachments. Routes through vision-capable
+   * providers only — chain steps without `visionModel` are skipped (logged in attempts).
+   *
+   * Images are inlined as data: URLs. Keep total payload modest (<10MB).
+   */
+  async replyWithMedia(message: string, opts: ReplyWithMediaOptions = {}): Promise<ReplyResult> {
+    const images = opts.images ?? [];
+    if (images.length === 0) {
+      return this.reply(message, opts);
+    }
+
+    // Convert images to data URLs once
+    const dataUrls = await Promise.all(images.map(fileToDataUrl));
+
+    const systemPrompt = opts.systemPrompt ?? this.cachedSystemPrompt;
+    const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [];
+    if (message) userContent.push({ type: "text", text: message });
+    for (const url of dataUrls) userContent.push({ type: "image_url", image_url: { url } });
+
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string | typeof userContent }> = [
+      { role: "system", content: systemPrompt },
+      ...(opts.history ?? []),
+      { role: "user", content: userContent }
+    ];
+
+    const attempts: AttemptInfo[] = [];
+    let lastError: unknown;
+    for (const step of this.steps) {
+      const endpoint = PROVIDER_ENDPOINTS[step.provider];
+      if (!endpoint.visionModel) {
+        attempts.push({ provider: step.provider, model: step.model, status: "error", error: "no vision support", latencyMs: 0 });
+        continue;
+      }
+      const t0 = Date.now();
+      const visionStep: ChainStep = { provider: step.provider, model: endpoint.visionModel, label: `${step.provider}/${endpoint.visionModel}` };
+      try {
+        const key = this.keys[step.provider];
+        if (!key) throw new Error(`Missing API key for provider: ${step.provider}`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          const res = await this.fetcher(`${endpoint.baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: visionStep.model, messages, temperature: 0.3, max_tokens: 400 }),
+            signal: controller.signal
+          });
+          if (!res.ok) {
+            const body = await res.text();
+            throw new Error(`${res.status}: ${body.slice(0, 200)}`);
+          }
+          const data = (await res.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+            usage?: { prompt_tokens?: number; completion_tokens?: number };
+          };
+          const reply = (data.choices?.[0]?.message?.content ?? "").trim();
+          if (!reply) throw new Error("empty vision reply");
+          attempts.push({ provider: visionStep.provider, model: visionStep.model, status: "ok", latencyMs: Date.now() - t0 });
+          const guard = checkForbiddenPhrases(reply);
+          const finalReply = guard.ok ? reply : stripForbidden(reply);
+          return {
+            reply: finalReply,
+            usedProvider: visionStep.provider,
+            usedModel: visionStep.model,
+            ...(data.usage ? { usage: data.usage } : {}),
+            guardWarnings: guard.violations,
+            attempts
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch (err) {
+        lastError = err;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        attempts.push({ provider: visionStep.provider, model: visionStep.model, status: "error", error: errMsg, latencyMs: Date.now() - t0 });
+        if (!isRetryableError(err)) {
+          throw new Error(`chatbotlite: ${visionStep.label} vision failed (non-retryable). ${errMsg}`);
+        }
+      }
+    }
+    const summary = attempts.map((a) => `${a.provider}/${a.model}:${a.error ?? "ok"}`).join(" → ");
+    throw new Error(`chatbotlite: no vision-capable provider succeeded. Trace: ${summary}. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
   }
 
   async reply(message: string, opts: ReplyOptions = {}): Promise<ReplyResult> {
