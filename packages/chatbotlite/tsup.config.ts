@@ -5,7 +5,8 @@ export default defineConfig({
     index: "src/index.ts",
     "core/index": "src/core/index.ts",
     "client/index": "src/client/index.ts",
-    "react/index": "src/react/index.tsx"
+    "react/index": "src/react/index.tsx",
+    "node/index": "src/node/index.ts"
   },
   format: ["esm", "cjs"],
   dts: true,
@@ -13,5 +14,5 @@ export default defineConfig({
   clean: true,
   splitting: false,
   treeshake: true,
-  external: ["react", "react-dom"]
+  external: ["react", "react-dom", "node:fs", "node:path"]
 });

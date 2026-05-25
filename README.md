@@ -33,21 +33,24 @@ export default function Layout({ children }) {
 import { ChatBot } from "chatbotlite";
 
 const bot = new ChatBot({
-  business: {
-    name: "Acme Plumbing",
-    services: [
-      { name: "Sink leak inspection", price: "$95" },
-      { name: "Toilet unclogging",    price: "$85-150" }
-    ],
-    hours: "Mon-Sat 8am-6pm",
-    serviceArea: ["Vancouver", "Burnaby"]
-  },
+  knowledge: `
+    # Acme Plumbing
+    Plumbing service in Vancouver & Burnaby. Mon-Sat 8am-6pm.
+
+    ## Services
+    - Sink leak inspection: $95
+    - Toilet unclogging: $85-150
+    - Burst pipe emergency: urgent owner review
+  `,
   providers: {
     keys: {
       deepseek: process.env.DEEPSEEK_API_KEY!,
       openai:   process.env.OPENAI_API_KEY!
     },
-    chain: ["deepseek/deepseek-chat", "openai/gpt-4o-mini"]
+    chain: [
+      { provider: "deepseek", model: "deepseek-chat" },
+      { provider: "openai",   model: "gpt-4o-mini" }
+    ]
   }
 });
 
@@ -57,6 +60,8 @@ export async function POST(req: Request) {
   return Response.json({ reply });
 }
 ```
+
+That's the **whole** integration. The `knowledge` field is just markdown — works for any business: plumber, restaurant, school, museum, portfolio. No schema to fight.
 
 That's the whole integration. You now have a floating chat bubble that:
 
@@ -139,13 +144,8 @@ export default function ChatMount() {
 import { ChatWidget } from "chatbotlite/react";
 
 <ChatWidget
-  business={{
-    name: "Sunrise Yoga",
-    services: [{ name: "Drop-in class", price: "$22" }]
-  }}
-  providers={{
-    keys: { openai: import.meta.env.VITE_OPENAI_KEY }
-  }}
+  knowledge="# Sunrise Yoga\n- Drop-in class: $22\n- Open Mon-Sun 6am-9pm"
+  providers={{ keys: { openai: import.meta.env.VITE_OPENAI_KEY } }}
 />
 ```
 
@@ -193,16 +193,16 @@ providers: {
     openai:   "sk-..."       // paid fallback, max reliability
   },
   chain: [
-    "deepseek/deepseek-chat",
-    "groq/llama-3.3-70b-versatile",
-    "openai/gpt-4o-mini"
+    { provider: "deepseek", model: "deepseek-chat" },
+    { provider: "groq",     model: "llama-3.3-70b-versatile" },
+    { provider: "openai",   model: "gpt-4o-mini" }
   ]
 }
 ```
 
 Top-to-bottom = priority. When a step throws a retryable error (429, 5xx, timeout), it falls through to the next.
 
-### Object form (type-safe alternative)
+### Same provider, cheaper fallback
 
 ```ts
 providers: {
@@ -218,44 +218,83 @@ providers: {
 
 `openai`, `deepseek`, `groq`, `gemini`, `anthropic`, `cerebras`, `sambanova`, `fireworks`, `mistral`, `openrouter`, `moonshot`
 
-Use any model the provider supports — just write `"provider/model-id"`.
+Use any model the provider supports — just pass the model name string.
 
 ---
 
-## Business config
+## Knowledge — just markdown
 
-The `business` object is your bot's brain. It teaches the bot what to say and what NOT to.
+The `knowledge` field is the bot's brain. It's plain markdown. Write it like you'd write a one-page memo for a new receptionist. No JSON schema, no required fields. Works for **any vertical** — plumber, restaurant, school, museum, portfolio site.
 
 ```ts
-{
-  name: "Acme Plumbing",
-  description: "Plumbing service in Greater Vancouver since 2018",
+const bot = new ChatBot({
+  knowledge: `
+    # Acme Plumbing
+    Plumbing service in Greater Vancouver since 2018.
 
-  services: [
-    { name: "Sink leak inspection", price: "$95", notes: "First-visit fee" },
-    { name: "Toilet unclogging",    price: "$85-150" },
-    { name: "Burst pipe emergency", notes: "Urgent — owner reviews directly" }
-  ],
+    ## Services
+    - Sink leak inspection: $95 first-visit fee
+    - Toilet unclogging: $85-150
+    - Burst pipe emergency: urgent — owner reviews directly
 
-  hours: "Mon-Sat 8am-6pm",
-  serviceArea: ["Vancouver", "Burnaby", "Richmond"],
+    ## Hours
+    Mon-Sat 8am-6pm
 
-  policies: [
-    { topic: "Payment",      answer: "We accept Interac e-Transfer and major credit cards." },
-    { topic: "Cancellation", answer: "Free cancellation up to 24h before the appointment." }
-  ],
+    ## Service area
+    Vancouver, Burnaby, Richmond
 
-  doNotPromise: [
-    "Specific arrival times — we can only give windows",
-    "Final repair quotes without inspection"
-  ],
+    ## Policies
+    - Payment: Interac e-Transfer or major credit cards
+    - Cancellation: free up to 24h before appointment
 
-  customInstructions: "Always remind customers to send photos of leaks for faster diagnosis.",
-  language: "en"     // or "zh", "es", "fr" — any language the model speaks
-}
+    ## Rules
+    - NEVER promise specific arrival times — give windows
+    - NEVER give final quotes without inspection
+    - Remind customers to send photos of leaks for faster diagnosis
+  `,
+  providers: { ... }
+});
 ```
 
-The bot uses only what's in here. Ask it about a service not listed → it defers to owner review. Ask for a guaranteed price → it refuses politely.
+The bot uses only what's in your markdown. Ask it about a service not listed → it defers to owner review. Ask for a guaranteed price → it refuses politely.
+
+### Loading from a folder
+
+For bigger knowledge bases (50+ services / multiple FAQ files), split into files:
+
+```
+kb/
+  about.md
+  services.md
+  policies.md
+  faq.md
+  hours.md
+```
+
+```ts
+import { ChatBot } from "chatbotlite";
+import { knowledgeFromDir } from "chatbotlite/node";
+
+const bot = new ChatBot({
+  knowledge: knowledgeFromDir("./kb"),
+  providers: { ... }
+});
+```
+
+`knowledgeFromDir` concatenates all `.md` / `.markdown` / `.txt` files alphabetically, each headed by its filename.
+
+### Loading from a single file
+
+```ts
+import { knowledgeFromFile } from "chatbotlite/node";
+
+const bot = new ChatBot({
+  knowledge: knowledgeFromFile("./business.md"),
+  providers: { ... }
+});
+```
+
+> **Why not a typed JSON schema?** Because your business is yours. A bookstore doesn't have "services with prices". A school doesn't have a "service area". A portfolio doesn't have "hours". Markdown lets every vertical describe themselves naturally — and the LLM is plenty smart to read prose.
 
 ---
 
@@ -321,8 +360,9 @@ Want a different UI? Use `ChatBot` headless and build your own.
 
 - [x] **v0.1** — MVP: business config, React widget, fallback chain, basic guards
 - [x] **v0.2** — Polished UI, model-based fallback chain (Vercel-style), attempts metadata
-- [ ] **v0.3** — Streaming, vanilla JS bundle, image upload, voice input
-- [ ] **v0.4** — RAG hooks for FAQ/docs, custom guards API
+- [x] **v0.3** — Markdown knowledge (any vertical), object-only chain, folder loader
+- [ ] **v0.4** — Streaming, vanilla JS bundle, image upload, voice input
+- [ ] **v0.5** — Auto-RAG when knowledge > 8k tokens, custom guards API
 - [ ] **v0.5** — Owner-review escalation flow, analytics + conversation export
 - [ ] **v1.0** — API stable
 

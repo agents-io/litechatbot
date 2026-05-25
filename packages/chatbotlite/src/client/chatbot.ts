@@ -1,13 +1,16 @@
-import type { BusinessConfig, Message } from "../core/types.js";
+import type { Knowledge, Message } from "../core/types.js";
 import { buildSystemPrompt } from "../core/prompts.js";
 import { checkForbiddenPhrases, stripForbidden } from "../core/guards.js";
 import type { Provider, ProviderConfig, ClientOptions, ChainStep, ChainEntry, AttemptInfo } from "./types.js";
-import { parseChainSpec, isKnownProvider } from "./types.js";
+import { isKnownProvider } from "./types.js";
 import { PROVIDER_ENDPOINTS, isRetryableError } from "./providers.js";
 
 export interface ChatBotInit {
-  business: BusinessConfig;
+  /** Markdown describing the business — services, hours, policies, anything. */
+  knowledge: Knowledge;
+  /** Provider keys + fallback chain. */
   providers: ProviderConfig;
+  /** Optional runtime overrides. */
   options?: ClientOptions;
 }
 
@@ -32,20 +35,22 @@ export interface ReplyResult {
 }
 
 /**
- * The main ChatBot entry. Holds business config + provider chain.
+ * The main ChatBot entry. Holds knowledge + provider chain.
  *
  * @example
  * const bot = new ChatBot({
- *   business: { name: "Acme Plumbing", services: [{ name: "Sink leak", price: "$95" }] },
+ *   knowledge: `# Acme Plumbing\n## Services\n- Sink leak: $95`,
  *   providers: {
- *     keys: { deepseek: "sk-...", groq: "gsk-...", openai: "sk-..." },
- *     chain: ["deepseek/deepseek-chat", "groq/llama-3.3-70b-versatile", "openai/gpt-4o-mini"]
+ *     keys: { deepseek: "sk-...", openai: "sk-..." },
+ *     chain: [
+ *       { provider: "deepseek", model: "deepseek-chat" },
+ *       { provider: "openai",   model: "gpt-4o-mini" }
+ *     ]
  *   }
  * });
  * const { reply } = await bot.reply("My sink is leaking");
  */
 export class ChatBot {
-  private readonly business: BusinessConfig;
   private readonly steps: ChainStep[];
   private readonly keys: Partial<Record<Provider, string>>;
   private readonly fetcher: typeof globalThis.fetch;
@@ -53,12 +58,14 @@ export class ChatBot {
   private readonly cachedSystemPrompt: string;
 
   constructor(init: ChatBotInit) {
-    this.business = init.business;
+    if (!init.knowledge || typeof init.knowledge !== "string" || init.knowledge.trim().length === 0) {
+      throw new Error("chatbotlite: knowledge is required (a non-empty markdown string).");
+    }
     this.keys = init.providers.keys ?? {};
     this.steps = resolveChain(init.providers);
     this.fetcher = init.options?.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = init.options?.timeoutMs ?? 30_000;
-    this.cachedSystemPrompt = buildSystemPrompt(this.business);
+    this.cachedSystemPrompt = buildSystemPrompt(init.knowledge);
   }
 
   async reply(message: string, opts: ReplyOptions = {}): Promise<ReplyResult> {
@@ -96,7 +103,7 @@ export class ChatBot {
           latencyMs: Date.now() - t0
         });
         if (!isRetryableError(err)) {
-          throw new Error(`chatbotlite: ${step.provider}/${step.model} failed (non-retryable). ${errMsg}`);
+          throw new Error(`chatbotlite: ${step.label} failed (non-retryable). ${errMsg}`);
         }
       }
     }
@@ -146,12 +153,6 @@ export class ChatBot {
   }
 }
 
-/**
- * Resolve `ProviderConfig` into an ordered list of concrete `{ provider, model }` steps.
- *
- * If `chain` is provided, parses each entry as `"provider/model"` or `"provider"` (uses default model).
- * If `chain` is omitted, builds chain from `keys` insertion order, each using provider's default model.
- */
 function resolveChain(providers: ProviderConfig): ChainStep[] {
   const keys = providers.keys ?? {};
   const explicit = providers.chain;
@@ -165,29 +166,18 @@ function resolveChain(providers: ProviderConfig): ChainStep[] {
   return orderedProviders.map((provider) => ({
     provider,
     model: PROVIDER_ENDPOINTS[provider].defaultModel,
-    spec: `${provider}/${PROVIDER_ENDPOINTS[provider].defaultModel}`
+    label: `${provider}/${PROVIDER_ENDPOINTS[provider].defaultModel}`
   }));
 }
 
 function normalizeChainEntry(entry: ChainEntry, keys: Partial<Record<Provider, string>>): ChainStep {
-  let provider: Provider;
-  let model: string;
-  let spec: string;
-  if (typeof entry === "string") {
-    const parsed = parseChainSpec(entry);
-    provider = parsed.provider;
-    model = parsed.model ?? PROVIDER_ENDPOINTS[provider].defaultModel;
-    spec = entry;
-  } else {
-    if (!isKnownProvider(entry.provider)) {
-      throw new Error(`chatbotlite: unknown provider "${entry.provider}" in chain entry.`);
-    }
-    provider = entry.provider;
-    model = entry.model ?? PROVIDER_ENDPOINTS[provider].defaultModel;
-    spec = `${provider}/${model}`;
+  if (!isKnownProvider(entry.provider)) {
+    throw new Error(`chatbotlite: unknown provider "${entry.provider}" in chain entry.`);
   }
+  const provider = entry.provider;
+  const model = entry.model ?? PROVIDER_ENDPOINTS[provider].defaultModel;
   if (!keys[provider]) {
-    throw new Error(`chatbotlite: chain step "${spec}" needs a key for provider "${provider}" but none was provided.`);
+    throw new Error(`chatbotlite: chain entry for "${provider}" needs a matching key in providers.keys.`);
   }
-  return { provider, model, spec };
+  return { provider, model, label: `${provider}/${model}` };
 }

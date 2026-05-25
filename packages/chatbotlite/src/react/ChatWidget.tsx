@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type ReactElement, type CSSProperties } from "react";
-import type { BusinessConfig, Message } from "../core/types.js";
+import type { Knowledge, Message } from "../core/types.js";
 import { ChatBot } from "../client/chatbot.js";
 import type { ProviderConfig } from "../client/types.js";
 
@@ -11,7 +11,7 @@ interface ChatWidgetCommonProps {
     /** Optional explicit text color for primary surfaces (defaults to white/contrast). */
     onPrimary?: string;
   };
-  /** Header title shown when widget is open (defaults to business.name or "Chat"). */
+  /** Header title shown when widget is open. */
   title?: string;
   /** Optional subtitle under the title (e.g. "We typically reply in minutes"). */
   subtitle?: string;
@@ -24,9 +24,9 @@ interface ChatWidgetCommonProps {
 }
 
 interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
-  /** Business config — name, services, hours, area, policies. */
-  business: BusinessConfig;
-  /** Provider chain + API keys (client-side mode). Keys WILL be exposed. */
+  /** Markdown knowledge for the bot. Client-side mode — API keys WILL be exposed. */
+  knowledge: Knowledge;
+  /** Provider chain + API keys. */
   providers: ProviderConfig;
   endpoint?: never;
 }
@@ -34,7 +34,7 @@ interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
 interface ChatWidgetEndpointProps extends ChatWidgetCommonProps {
   /** POST URL of your server route (e.g. "/api/chat"). Server should accept { message, transcript } and return { reply }. */
   endpoint: string;
-  business?: never;
+  knowledge?: never;
   providers?: never;
 }
 
@@ -98,10 +98,8 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   } = props;
 
   const isEndpointMode = "endpoint" in props && typeof props.endpoint === "string";
-  const resolvedTitle = title ?? props.business?.name ?? "Chat";
-  const resolvedGreeting = greeting ?? (props.business
-    ? `Hi! I'm here for ${props.business.name}. How can we help?`
-    : "Hi! How can we help?");
+  const resolvedTitle = title ?? "Chat";
+  const resolvedGreeting = greeting ?? "Hi! How can we help?";
 
   const primary = themeOverrides?.primary ?? DEFAULT_PRIMARY;
   const onPrimary = themeOverrides?.onPrimary ?? DEFAULT_ON_PRIMARY;
@@ -119,9 +117,9 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
 
   const bot = useMemo(() => {
     if (isEndpointMode) return null;
-    if (!props.business || !props.providers) return null;
-    return new ChatBot({ business: props.business, providers: props.providers });
-  }, [isEndpointMode, props.business, props.providers]);
+    if (!props.knowledge || !props.providers) return null;
+    return new ChatBot({ knowledge: props.knowledge, providers: props.providers });
+  }, [isEndpointMode, props.knowledge, props.providers]);
 
   useEffect(() => {
     if (scrollRef.current) {

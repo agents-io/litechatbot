@@ -1,6 +1,6 @@
 {
   "name": "chatbotlite",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "Drop-in AI chatbot SDK + React widget. Multi-LLM with fallback, business config, anti-hallucination guards. One import, one config — your site has a chatbot.",
   "license": "Apache-2.0",
   "author": "agents.io",
@@ -54,6 +54,11 @@
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js",
       "require": "./dist/react/index.cjs"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js",
+      "require": "./dist/node/index.cjs"
     }
   },
   "files": [
@@ -72,8 +77,12 @@
     "react-dom": ">=18.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
