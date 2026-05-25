@@ -1,0 +1,27 @@
+{
+  "name": "litechatbot-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Drop-in chatbot SDK for any website. Multi-LLM with fallback, business config, anti-hallucination guards, React widget.",
+  "license": "Apache-2.0",
+  "author": "agents.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agents-io/litechatbot.git"
+  },
+  "homepage": "https://github.com/agents-io/litechatbot",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' build",
+    "test": "pnpm -r --filter './packages/*' test",
+    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "clean": "pnpm -r exec rm -rf dist node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

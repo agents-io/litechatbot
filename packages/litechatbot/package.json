@@ -1,0 +1,91 @@
+{
+  "name": "litechatbot",
+  "version": "0.1.0",
+  "description": "Drop-in chatbot SDK + React widget. Multi-LLM with fallback, business config, anti-hallucination guards. One import, one config — your site has a chatbot.",
+  "license": "Apache-2.0",
+  "author": "agents.io",
+  "homepage": "https://github.com/agents-io/litechatbot",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agents-io/litechatbot.git",
+    "directory": "packages/litechatbot"
+  },
+  "bugs": "https://github.com/agents-io/litechatbot/issues",
+  "keywords": [
+    "chatbot",
+    "ai",
+    "llm",
+    "customer-service",
+    "react",
+    "widget",
+    "sdk",
+    "openai",
+    "deepseek",
+    "groq",
+    "anthropic",
+    "litellm",
+    "drop-in",
+    "fallback",
+    "multi-provider",
+    "sms",
+    "small-business"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/client/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
