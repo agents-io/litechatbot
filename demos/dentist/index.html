@@ -52,7 +52,6 @@
     greeting: "Hi! Ask about services, insurance coverage, or book your visit.",
     theme: { primary: "#0d9488" },
     attach: { enabled: true, accept: ["image/*", ".pdf"], maxSizeMb: 5 },
-    voice: { enabled: true },
     tools: {
       uploadForReview: {
         handler: async ({ files, purpose }) => ({ status: "received", filename: files[0]?.name })

@@ -58,6 +58,21 @@ interface ChatWidgetCommonProps {
   };
   /** LLM-triggered tool registry. Bot emits `[SKILL:name args]` → widget renders matching card. */
   tools?: ChatWidgetTools;
+  /**
+   * Header avatar. Defaults to NONE (no avatar, just title) — most website chatbots don't
+   * need one.
+   * - `true`  → circular badge with first letter of `title` on brand color
+   * - `"https://..."` → image URL (rendered in 32px circle)
+   * - omit / `false` → no avatar (default)
+   */
+  avatar?: boolean | string;
+  /**
+   * Launcher button icon. Customer override for the floating button glyph.
+   * - omit → default chat-bubble SVG
+   * - emoji string (e.g. "⚡", "💬", "🤖")
+   * - URL → rendered as image
+   */
+  launcherIcon?: string;
 }
 
 interface ChatWidgetDirectProps extends ChatWidgetCommonProps {
@@ -93,6 +108,21 @@ interface ChatMessage extends Message {
 const BOLT = "\u26A1";
 const DEFAULT_PRIMARY = "#0f172a";
 const DEFAULT_ON_PRIMARY = "#ffffff";
+
+/**
+ * WCAG relative luminance for a hex color. Used to pick contrast text + outline.
+ * Returns 0-1. > 0.65 ≈ light (yellow/lime/pale) → need dark text on the bubble.
+ */
+function luminance(hex: string): number {
+  const m = hex.replace("#", "");
+  const norm = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  if (norm.length !== 6) return 0;
+  const r = parseInt(norm.slice(0, 2), 16) / 255;
+  const g = parseInt(norm.slice(2, 4), 16) / 255;
+  const b = parseInt(norm.slice(4, 6), 16) / 255;
+  const toLinear = (c: number): number => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
 const SURFACE = "#ffffff";
 const CHAT_BG = "#f5f1eb";          // off-white warm tone (messenger feel, not clinical)
 const BUBBLE_BOT = "#ffffff";        // bot bubble = white, sits on warm bg
@@ -110,7 +140,7 @@ const KEYFRAMES = `
 @keyframes chatbotlite-slide { 0% { opacity: 0; transform: translateY(16px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes chatbotlite-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes chatbotlite-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
-@keyframes chatbotlite-cursor { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+@keyframes chatbotlite-cursor { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.2; } }
 @keyframes chatbotlite-pulse { 0%, 100% { box-shadow: 0 12px 28px -8px rgba(15,23,42,0.32), 0 4px 8px -2px rgba(15,23,42,0.12); } 50% { box-shadow: 0 14px 32px -8px rgba(15,23,42,0.36), 0 6px 12px -2px rgba(15,23,42,0.16); } }
 .chatbotlite-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); animation: chatbotlite-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1), chatbotlite-pulse 3.6s ease-in-out 1.2s 2; }
 .chatbotlite-launcher:hover { transform: translateY(-2px) scale(1.04); }
@@ -120,10 +150,12 @@ const KEYFRAMES = `
 .chatbotlite-send { transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }
 .chatbotlite-send:not(:disabled):hover { transform: translateY(-1px); }
 .chatbotlite-send:not(:disabled):active { transform: translateY(0); }
-.chatbotlite-input:focus { box-shadow: 0 0 0 3px rgba(15,23,42,0.06); }
+.chatbotlite-input:focus { box-shadow: none; outline: none; }
+.chatbotlite-composer { transition: background 120ms ease, box-shadow 120ms ease; }
+.chatbotlite-composer:focus-within { background: ${SURFACE}; box-shadow: 0 0 0 1px ${BORDER}, 0 1px 2px rgba(15,23,42,0.04); }
 .chatbotlite-msg { animation: chatbotlite-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
 .chatbotlite-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: chatbotlite-dot 1.2s ease-in-out infinite; }
-.chatbotlite-cursor { display: inline-block; width: 2px; height: 1em; background: currentColor; vertical-align: text-bottom; margin-left: 1px; animation: chatbotlite-cursor 1s steps(1) infinite; }
+.chatbotlite-cursor { display: inline-block; width: 0.5ch; vertical-align: text-bottom; margin-left: 1px; font-size: inherit; line-height: inherit; animation: chatbotlite-cursor 1s ease-in-out infinite; }
 .chatbotlite-icon-btn:hover:not(:disabled) { background: rgba(15,23,42,0.06) !important; opacity: 1 !important; }
 .chatbotlite-icon-btn:active:not(:disabled) { transform: scale(0.92); }
 .chatbotlite-dot:nth-child(2) { animation-delay: 0.15s; }
@@ -155,7 +187,9 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const resolvedGreeting = greeting ?? "Hi! How can we help?";
 
   const primary = themeOverrides?.primary ?? DEFAULT_PRIMARY;
-  const onPrimary = themeOverrides?.onPrimary ?? DEFAULT_ON_PRIMARY;
+  // WCAG-based contrast fallback: light primaries (yellow/lime/pale) auto-switch to dark text
+  const primaryIsLight = luminance(primary) > 0.65;
+  const onPrimary = themeOverrides?.onPrimary ?? (primaryIsLight ? "#0f172a" : DEFAULT_ON_PRIMARY);
 
   const attachCfg = props.attach;
   const attachEnabled = attachCfg?.enabled === true;
@@ -466,7 +500,18 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             justifyContent: "center"
           }}
         >
-          <span style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}>{BOLT}</span>
+          {props.launcherIcon
+            ? (props.launcherIcon.startsWith("http") || props.launcherIcon.startsWith("/")
+                ? <img src={props.launcherIcon} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
+                : <span style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}>{props.launcherIcon}</span>)
+            : (
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12a8 8 0 0 1-13.6 5.8L3 19l1.2-4.4A8 8 0 1 1 21 12z" />
+                <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+              </svg>
+            )}
         </button>
       )}
 
@@ -504,31 +549,49 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             gap: 12,
             borderBottom: `1px solid ${BORDER_LIGHT}`
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              {/* Avatar circle (messenger-style) */}
-              <div style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: primary,
-                color: onPrimary,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: 600,
-                flexShrink: 0,
-                letterSpacing: "-0.02em"
-              }}>
-                {resolvedTitle.charAt(0).toUpperCase()}
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: props.avatar ? 10 : 0, minWidth: 0 }}>
+              {/* Avatar — opt-in: true=letter badge, string=image URL, omit=none */}
+              {props.avatar === true && (
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: primary,
+                  color: onPrimary,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  letterSpacing: "-0.02em"
+                }}>
+                  {resolvedTitle.charAt(0).toUpperCase()}
+                </div>
+              )}
+              {typeof props.avatar === "string" && (
+                <img
+                  src={props.avatar}
+                  alt=""
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                    border: `1px solid ${BORDER}`
+                  }}
+                />
+              )}
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
                 <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: TEXT_BODY }}>
                   {resolvedTitle}
                 </span>
-                <span style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {subtitle ?? (sending ? "typing…" : "online")}
-                </span>
+                {(subtitle || sending) && (
+                  <span style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {subtitle ?? (sending ? "typing…" : "")}
+                  </span>
+                )}
               </div>
             </div>
             <button
@@ -574,26 +637,32 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     className="chatbotlite-msg"
                     style={{
                       alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                      maxWidth: "78%",
-                      padding: "8px 12px",
-                      borderRadius: 18,
+                      maxWidth: "82%",
+                      padding: "9px 13px",
+                      borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                       background: m.role === "user" ? primary : BUBBLE_BOT,
                       color: m.role === "user" ? onPrimary : TEXT_BODY,
-                      border: "none",
-                      fontSize: 14.5,
-                      lineHeight: 1.4,
+                      border: m.role === "user" ? "none" : `1px solid ${BORDER}`,
+                      fontSize: 14,
+                      lineHeight: 1.5,
                       letterSpacing: "-0.005em",
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                       boxShadow: m.role === "user"
-                        ? "none"
-                        : "0 1px 0.5px rgba(15,23,42,0.05)"
+                        ? "0 1px 2px rgba(15,23,42,0.12)"
+                        : "0 1px 2px rgba(15,23,42,0.04)"
                     }}
                   >
                     {m.content}
-                    {/* Streaming cursor on the message currently being filled */}
+                    {/* Streaming cursor — signature ▍ in brand color */}
                     {sending && m.role === "assistant" && m === messages[messages.length - 1] && (
-                      <span className="chatbotlite-cursor" aria-hidden="true" />
+                      <span
+                        className="chatbotlite-cursor"
+                        style={{ color: primary }}
+                        aria-hidden="true"
+                      >
+                        {"\u258D"}
+                      </span>
                     )}
                   </div>
                 )}
@@ -696,10 +765,11 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                 className="chatbotlite-msg"
                 style={{
                   alignSelf: "flex-start",
-                  padding: "10px 14px",
-                  borderRadius: 18,
+                  padding: "12px 14px",
+                  borderRadius: "18px 18px 18px 4px",
                   background: BUBBLE_BOT,
-                  boxShadow: "0 1px 0.5px rgba(15,23,42,0.05)"
+                  border: `1px solid ${BORDER}`,
+                  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
                 }}
               >
                 <span className="chatbotlite-dot" />
@@ -749,15 +819,17 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             padding: "10px 12px 12px",
             background: SURFACE
           }}>
-            <div style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 6,
-              padding: "6px 6px 6px 10px",
-              background: INPUT_BG,
-              borderRadius: 22,
-              transition: "background 120ms ease"
-            }}>
+            <div
+              className="chatbotlite-composer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "4px 4px 4px 8px",
+                background: INPUT_BG,
+                borderRadius: 999
+              }}
+            >
               {attachEnabled && (
                 <>
                   <input
@@ -832,8 +904,10 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                 onChange={(e) => {
                   setInput(e.target.value);
                   const el = e.currentTarget;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 100) + "px";
+                  el.style.height = "20px";
+                  if (el.scrollHeight > 28) {
+                    el.style.height = Math.min(el.scrollHeight, 100) + "px";
+                  }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -845,17 +919,20 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                 disabled={sending}
                 style={{
                   flex: 1,
-                  padding: "7px 4px",
+                  padding: "4px 6px",
+                  margin: 0,
                   border: "none",
                   background: "transparent",
-                  fontSize: 14.5,
+                  fontSize: 14,
                   fontFamily: FONT_STACK,
                   color: TEXT_BODY,
                   outline: "none",
                   resize: "none",
-                  lineHeight: 1.35,
+                  lineHeight: 1.4,
+                  height: 20,
                   maxHeight: 100,
-                  minHeight: 20
+                  boxSizing: "content-box",
+                  overflow: "hidden"
                 }}
               />
               <button
