@@ -94,12 +94,15 @@ const BOLT = "\u26A1";
 const DEFAULT_PRIMARY = "#0f172a";
 const DEFAULT_ON_PRIMARY = "#ffffff";
 const SURFACE = "#ffffff";
-const SURFACE_MUTED = "#fafbfc";
+const CHAT_BG = "#f5f1eb";          // off-white warm tone (messenger feel, not clinical)
+const BUBBLE_BOT = "#ffffff";        // bot bubble = white, sits on warm bg
+const INPUT_BG = "#f1f3f5";          // light gray composer pill (Telegram-style)
 const BORDER = "#e5e7eb";
+const BORDER_LIGHT = "rgba(15,23,42,0.06)";
 const TEXT_BODY = "#0f172a";
 const TEXT_MUTED = "#64748b";
 const TEXT_FAINT = "#94a3b8";
-const FONT_STACK = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+const FONT_STACK = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
 
 const STYLE_TAG_ID = "chatbotlite-widget-styles";
 const KEYFRAMES = `
@@ -112,8 +115,8 @@ const KEYFRAMES = `
 .chatbotlite-launcher { transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1); animation: chatbotlite-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1), chatbotlite-pulse 3.6s ease-in-out 1.2s 2; }
 .chatbotlite-launcher:hover { transform: translateY(-2px) scale(1.04); }
 .chatbotlite-launcher:active { transform: translateY(0) scale(0.98); }
-.chatbotlite-close { transition: background 120ms ease; }
-.chatbotlite-close:hover { background: rgba(255,255,255,0.16); }
+.chatbotlite-close { transition: background 120ms ease, color 120ms ease; }
+.chatbotlite-close:hover { background: rgba(15,23,42,0.06); color: ${TEXT_BODY}; }
 .chatbotlite-send { transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease; }
 .chatbotlite-send:not(:disabled):hover { transform: translateY(-1px); }
 .chatbotlite-send:not(:disabled):active { transform: translateY(0); }
@@ -121,8 +124,8 @@ const KEYFRAMES = `
 .chatbotlite-msg { animation: chatbotlite-fade-in 220ms cubic-bezier(0.4, 0, 0.2, 1); }
 .chatbotlite-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${TEXT_FAINT}; margin-right: 4px; animation: chatbotlite-dot 1.2s ease-in-out infinite; }
 .chatbotlite-cursor { display: inline-block; width: 2px; height: 1em; background: currentColor; vertical-align: text-bottom; margin-left: 1px; animation: chatbotlite-cursor 1s steps(1) infinite; }
-.chatbotlite-attach-btn:hover:not(:disabled), .chatbotlite-voice-btn:hover:not(:disabled) { background: ${BORDER}; }
-.chatbotlite-attach-btn:active:not(:disabled), .chatbotlite-voice-btn:active:not(:disabled) { transform: scale(0.96); }
+.chatbotlite-icon-btn:hover:not(:disabled) { background: rgba(15,23,42,0.06) !important; opacity: 1 !important; }
+.chatbotlite-icon-btn:active:not(:disabled) { transform: scale(0.92); }
 .chatbotlite-dot:nth-child(2) { animation-delay: 0.15s; }
 .chatbotlite-dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
 .chatbotlite-brand:hover { color: ${TEXT_MUTED} !important; }
@@ -175,7 +178,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
   const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [pendingTools, setPendingTools] = useState<PendingTool[]>([]);
@@ -492,23 +495,41 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
           }}
         >
           <header style={{
-            padding: "16px 18px",
-            background: primary,
-            color: onPrimary,
+            padding: "14px 16px",
+            background: SURFACE,
+            color: TEXT_BODY,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            gap: 12
+            gap: 12,
+            borderBottom: `1px solid ${BORDER_LIGHT}`
           }}>
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
-              <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {resolvedTitle}
-              </span>
-              {subtitle && (
-                <span style={{ fontSize: 12, opacity: 0.7, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {subtitle}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              {/* Avatar circle (messenger-style) */}
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: primary,
+                color: onPrimary,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: 600,
+                flexShrink: 0,
+                letterSpacing: "-0.02em"
+              }}>
+                {resolvedTitle.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+                <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: TEXT_BODY }}>
+                  {resolvedTitle}
                 </span>
-              )}
+                <span style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {subtitle ?? (sending ? "typing…" : "online")}
+                </span>
+              </div>
             </div>
             <button
               className="chatbotlite-close"
@@ -517,7 +538,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
               style={{
                 background: "transparent",
                 border: "none",
-                color: onPrimary,
+                color: TEXT_MUTED,
                 width: 32,
                 height: 32,
                 borderRadius: 10,
@@ -543,7 +564,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
               display: "flex",
               flexDirection: "column",
               gap: 8,
-              background: SURFACE_MUTED
+              background: CHAT_BG
             }}
           >
             {messages.map((m) => (
@@ -553,20 +574,20 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     className="chatbotlite-msg"
                     style={{
                       alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                      maxWidth: "82%",
-                      padding: "9px 13px",
-                      borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                      background: m.role === "user" ? primary : SURFACE,
+                      maxWidth: "78%",
+                      padding: "8px 12px",
+                      borderRadius: 18,
+                      background: m.role === "user" ? primary : BUBBLE_BOT,
                       color: m.role === "user" ? onPrimary : TEXT_BODY,
-                      border: m.role === "user" ? "none" : `1px solid ${BORDER}`,
-                      fontSize: 14,
-                      lineHeight: 1.5,
+                      border: "none",
+                      fontSize: 14.5,
+                      lineHeight: 1.4,
                       letterSpacing: "-0.005em",
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                       boxShadow: m.role === "user"
-                        ? "0 1px 2px rgba(15,23,42,0.12)"
-                        : "0 1px 2px rgba(15,23,42,0.04)"
+                        ? "none"
+                        : "0 1px 0.5px rgba(15,23,42,0.05)"
                     }}
                   >
                     {m.content}
@@ -584,7 +605,7 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     const toolCommonStyle = { className: "chatbotlite-msg", style: { alignSelf: "stretch" } };
                     const palette = {
                       primary, onPrimary,
-                      border: BORDER, surface: SURFACE, surfaceMuted: SURFACE_MUTED,
+                      border: BORDER, surface: SURFACE, surfaceMuted: CHAT_BG,
                       textBody: TEXT_BODY, textMuted: TEXT_MUTED
                     };
                     if (pt.marker.name === "uploadForReview" && tools.uploadForReview) {
@@ -670,16 +691,15 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                   })}
               </div>
             ))}
-            {sending && (
+            {sending && messages[messages.length - 1]?.content === "" && (
               <div
                 className="chatbotlite-msg"
                 style={{
                   alignSelf: "flex-start",
-                  padding: "12px 14px",
-                  borderRadius: "18px 18px 18px 4px",
-                  background: SURFACE,
-                  border: `1px solid ${BORDER}`,
-                  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+                  padding: "10px 14px",
+                  borderRadius: 18,
+                  background: BUBBLE_BOT,
+                  boxShadow: "0 1px 0.5px rgba(15,23,42,0.05)"
                 }}
               >
                 <span className="chatbotlite-dot" />
@@ -689,53 +709,55 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
             )}
           </div>
 
+          {/* File chips above composer pill */}
+          {files.length > 0 && (
+            <div style={{
+              padding: "8px 12px 0",
+              background: SURFACE,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6
+            }}>
+              {files.map((f, i) => (
+                <span
+                  key={`${f.name}-${i}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 8px 4px 10px",
+                    borderRadius: 999,
+                    background: INPUT_BG,
+                    fontSize: 12,
+                    color: TEXT_BODY,
+                    maxWidth: 200
+                  }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📎 {f.name}</span>
+                  <button
+                    onClick={() => removeFile(i)}
+                    aria-label={`Remove ${f.name}`}
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: TEXT_MUTED, fontSize: 14, lineHeight: 1, padding: 0 }}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Composer — messenger-style pill */}
           <div style={{
-            display: "flex",
-            flexDirection: "column",
-            padding: 12,
-            gap: 8,
-            background: SURFACE,
-            borderTop: `1px solid ${BORDER}`
+            padding: "10px 12px 12px",
+            background: SURFACE
           }}>
-            {files.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {files.map((f, i) => (
-                  <span
-                    key={`${f.name}-${i}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 8px 4px 10px",
-                      borderRadius: 8,
-                      background: SURFACE_MUTED,
-                      border: `1px solid ${BORDER}`,
-                      fontSize: 12,
-                      color: TEXT_BODY,
-                      maxWidth: 200
-                    }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      📎 {f.name}
-                    </span>
-                    <button
-                      onClick={() => removeFile(i)}
-                      aria-label={`Remove ${f.name}`}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        color: TEXT_MUTED,
-                        fontSize: 14,
-                        lineHeight: 1,
-                        padding: 0
-                      }}
-                    >×</button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 6,
+              padding: "6px 6px 6px 10px",
+              background: INPUT_BG,
+              borderRadius: 22,
+              transition: "background 120ms ease"
+            }}>
               {attachEnabled && (
                 <>
                   <input
@@ -750,89 +772,122 @@ export function ChatWidget(props: ChatWidgetProps): ReactElement {
                     }}
                   />
                   <button
-                    className="chatbotlite-attach-btn"
+                    className="chatbotlite-icon-btn"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={sending || files.length >= maxFiles}
                     aria-label="Attach file"
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: SURFACE_MUTED,
-                      border: `1px solid ${BORDER}`,
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: "transparent",
+                      border: "none",
                       cursor: sending || files.length >= maxFiles ? "default" : "pointer",
-                      opacity: sending || files.length >= maxFiles ? 0.4 : 1,
-                      fontSize: 16,
-                      transition: "background 120ms ease, transform 80ms ease"
+                      opacity: sending || files.length >= maxFiles ? 0.35 : 0.7,
+                      fontSize: 18,
+                      lineHeight: 1,
+                      padding: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      alignSelf: "center",
+                      transition: "opacity 120ms ease, background 120ms ease"
                     }}
                   >📎</button>
                 </>
               )}
               {voiceEnabled && speechSupported && (
                 <button
-                  className="chatbotlite-voice-btn"
+                  className="chatbotlite-icon-btn"
                   onClick={toggleVoice}
                   disabled={sending}
                   aria-label={voiceListening ? "Stop recording" : "Start voice input"}
                   style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: voiceListening ? primary : SURFACE_MUTED,
-                    color: voiceListening ? onPrimary : TEXT_BODY,
-                    border: `1px solid ${voiceListening ? primary : BORDER}`,
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: voiceListening ? primary : "transparent",
+                    color: voiceListening ? onPrimary : "inherit",
+                    border: "none",
                     cursor: sending ? "default" : "pointer",
-                    opacity: sending ? 0.4 : 1,
+                    opacity: sending ? 0.35 : (voiceListening ? 1 : 0.7),
                     fontSize: 16,
-                    transition: "background 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease"
+                    lineHeight: 1,
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    alignSelf: "center",
+                    transition: "opacity 120ms ease, background 120ms ease, color 120ms ease"
                   }}
                 >🎙️</button>
               )}
-            <input
-              ref={inputRef}
-              className="chatbotlite-input"
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-              placeholder="Type a message…"
-              disabled={sending}
-              style={{
-                flex: 1,
-                padding: "10px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BORDER}`,
-                background: SURFACE_MUTED,
-                fontSize: 14,
-                fontFamily: FONT_STACK,
-                color: TEXT_BODY,
-                outline: "none",
-                transition: "box-shadow 120ms ease, border-color 120ms ease"
-              }}
-            />
-            <button
-              className="chatbotlite-send"
-              onClick={() => void send()}
-              disabled={sending || (!input.trim() && files.length === 0)}
-              aria-label="Send message"
-              style={{
-                padding: "0 16px",
-                height: 40,
-                minWidth: 64,
-                borderRadius: 12,
-                background: primary,
-                color: onPrimary,
-                border: "none",
-                fontSize: 14,
-                fontWeight: 600,
-                fontFamily: FONT_STACK,
-                cursor: sending || (!input.trim() && files.length === 0) ? "default" : "pointer",
-                opacity: sending || (!input.trim() && files.length === 0) ? 0.4 : 1,
-                boxShadow: "0 2px 6px -1px rgba(15,23,42,0.18)"
-              }}
-            >
-              Send
-            </button>
+              <textarea
+                ref={inputRef}
+                className="chatbotlite-input"
+                rows={1}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 100) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                placeholder="Message"
+                disabled={sending}
+                style={{
+                  flex: 1,
+                  padding: "7px 4px",
+                  border: "none",
+                  background: "transparent",
+                  fontSize: 14.5,
+                  fontFamily: FONT_STACK,
+                  color: TEXT_BODY,
+                  outline: "none",
+                  resize: "none",
+                  lineHeight: 1.35,
+                  maxHeight: 100,
+                  minHeight: 20
+                }}
+              />
+              <button
+                className="chatbotlite-send"
+                onClick={() => void send()}
+                disabled={sending || (!input.trim() && files.length === 0)}
+                aria-label="Send message"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: primary,
+                  color: onPrimary,
+                  border: "none",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  fontFamily: FONT_STACK,
+                  cursor: sending || (!input.trim() && files.length === 0) ? "default" : "pointer",
+                  opacity: sending || (!input.trim() && files.length === 0) ? 0.35 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  padding: 0,
+                  transition: "opacity 120ms ease, transform 80ms ease"
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
             </div>
           </div>
 
